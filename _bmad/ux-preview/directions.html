@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HaNative — Layout Direction Exploration</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #060608;
+  font-family: -apple-system, 'Inter', sans-serif;
+  padding: 36px 24px 48px;
+}
+
+h1 {
+  color: rgba(255,255,255,0.3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px 32px;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.dir-num {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.25);
+}
+
+.dir-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #F59E0B;
+  letter-spacing: -0.01em;
+}
+
+.dir-desc {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  text-align: center;
+  line-height: 1.5;
+  max-width: 220px;
+}
+
+/* ── Phone shell ── */
+.phone {
+  width: 200px;
+  height: 420px;
+  border-radius: 32px;
+  border: 1.5px solid rgba(255,255,255,0.09);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #0D1117;
+  box-shadow: 0 24px 56px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.04);
+  color: #E6EDF3;
+}
+
+/* ── Common elements ── */
+.sb {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 16px 2px;
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(230,237,243,0.4);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #0D2010;
+  color: #3FB950;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+.dot { width: 5px; height: 5px; border-radius: 50%; background: #3FB950; }
+
+.card {
+  background: #161B22;
+  border-radius: 16px;
+  padding: 11px 11px 9px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.ci { font-size: 14px; }
+.cl { font-size: 8px; color: rgba(230,237,243,0.45); font-weight: 500; margin: 2px 0 1px; }
+.cv { font-size: 11px; font-weight: 800; }
+.acc { color: #F59E0B; }
+.tog {
+  width: 22px; height: 12px; border-radius: 6px;
+  display: flex; align-items: center; padding: 2px;
+  margin-top: 5px;
+}
+.tok { width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+.on { background: #F59E0B; }
+.on .tok { margin-left: auto; }
+.off { background: #30363D; }
+
+/* ── DIRECTION 1: Grid + Bottom Nav ── */
+.d1 .hdr {
+  padding: 3px 14px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.d1 .hdr-t { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.d1 .hdr-b {
+  width: 26px; height: 26px; border-radius: 9px;
+  background: #1C2333;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; opacity: 0.55;
+}
+.d1 .pill-row { padding: 0 12px 7px; }
+.d1 .cards {
+  padding: 0 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  flex: 1;
+}
+.d1 .wide {
+  grid-column: span 2;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+.d1 .wl { display: flex; flex-direction: column; gap: 1px; }
+.d1 .wr { display: flex; align-items: center; gap: 5px; }
+.d1 .tb {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #1C2333;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: rgba(230,237,243,0.5);
+}
+.d1 .tv { font-size: 16px; font-weight: 800; }
+.d1 .nav {
+  padding: 9px 16px 13px;
+  display: flex;
+  justify-content: space-around;
+  border-top: 1px solid #21262D;
+  background: #0D1117;
+}
+.d1 .ni {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: 7px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: rgba(230,237,243,0.35);
+}
+.d1 .ni.on { color: #F59E0B; }
+.d1 .ni-ic { font-size: 13px; }
+
+/* ── DIRECTION 2: Dashboard Tabs + Full-width Cards ── */
+.d2 .dash-tabs {
+  display: flex;
+  gap: 0;
+  padding: 4px 12px 0;
+  border-bottom: 1px solid #21262D;
+  margin-bottom: 8px;
+}
+.d2 .tab {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 6px 10px 7px;
+  color: rgba(230,237,243,0.35);
+  border-bottom: 2px solid transparent;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.d2 .tab.on {
+  color: #F59E0B;
+  border-bottom-color: #F59E0B;
+}
+.d2 .pill-row { padding: 0 12px 8px; }
+.d2 .cards {
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.d2 .fw-card {
+  background: #161B22;
+  border-radius: 14px;
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.d2 .fw-left { display: flex; align-items: center; gap: 10px; }
+.d2 .fw-meta { display: flex; flex-direction: column; gap: 1px; }
+.d2 .fw-right { display: flex; align-items: center; gap: 6px; }
+.d2 .therm-val { font-size: 18px; font-weight: 800; }
+.d2 .adj { font-size: 14px; color: rgba(230,237,243,0.4); font-weight: 700; }
+.d2 .bot {
+  padding: 8px 14px 12px;
+  border-top: 1px solid #21262D;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.d2 .context-badge {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 3px 8px;
+  background: #1C2333;
+  border-radius: 20px;
+  color: rgba(230,237,243,0.5);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.d2 .add-btn {
+  width: 24px; height: 24px;
+  background: #F59E0B;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: #0D1117;
+}
+
+/* ── DIRECTION 3: Hero Card + Grid ── */
+.d3 .hdr {
+  padding: 3px 14px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.d3 .hdr-t { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+.d3 .hdr-b {
+  width: 24px; height: 24px; border-radius: 8px;
+  background: #1C2333;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; opacity: 0.5;
+}
+.d3 .pill-row { padding: 0 12px 7px; }
+.d3 .hero {
+  margin: 0 10px 6px;
+  background: #2D1E06;
+  border-radius: 18px;
+  padding: 14px 16px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.d3 .hero-left { display: flex; flex-direction: column; gap: 2px; }
+.d3 .hero-icon { font-size: 22px; margin-bottom: 6px; }
+.d3 .hero-label { font-size: 9px; color: rgba(230,237,243,0.45); font-weight: 500; }
+.d3 .hero-val { font-size: 22px; font-weight: 800; }
+.d3 .hero-sub { font-size: 9px; color: rgba(230,237,243,0.5); }
+.d3 .hero-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.d3 .hero-tog {
+  width: 34px; height: 19px; border-radius: 10px;
+  background: #F59E0B;
+  display: flex; align-items: center; padding: 3px;
+}
+.d3 .hero-tok { width: 13px; height: 13px; border-radius: 50%; background: #fff; margin-left: auto; }
+.d3 .hero-pct { font-size: 9px; color: rgba(230,237,243,0.45); }
+.d3 .sub-grid {
+  padding: 0 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 5px;
+  flex: 1;
+}
+.d3 .mini {
+  background: #161B22;
+  border-radius: 12px;
+  padding: 9px 8px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.d3 .mi { font-size: 13px; }
+.d3 .ml { font-size: 7px; color: rgba(230,237,243,0.4); font-weight: 500; }
+.d3 .mv { font-size: 9px; font-weight: 800; }
+.d3 .mt {
+  width: 18px; height: 10px; border-radius: 5px;
+  display: flex; align-items: center; padding: 1px;
+  margin-top: 3px;
+}
+.d3 .mtk { width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+.d3 .nav {
+  padding: 8px 14px 12px;
+  display: flex;
+  justify-content: space-around;
+  border-top: 1px solid #21262D;
+  background: #0D1117;
+}
+.d3 .ni {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: 7px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: rgba(230,237,243,0.3);
+}
+.d3 .ni.on { color: #F59E0B; }
+.d3 .ni-ic { font-size: 12px; }
+
+/* ── DIRECTION 4: Minimal / Ambient ── */
+.d4 .ambient-bg { background: #090C12; }
+.d4 .hdr {
+  padding: 6px 16px 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.d4 .hdr-t { font-size: 13px; font-weight: 700; color: rgba(230,237,243,0.5); letter-spacing: 0.04em; text-transform: uppercase; }
+.d4 .hdr-dash-name { font-size: 22px; font-weight: 800; color: #E6EDF3; letter-spacing: -0.02em; }
+.d4 .cog { font-size: 14px; color: rgba(230,237,243,0.3); }
+.d4 .pill-row { padding: 2px 16px 10px; }
+.d4 .section-label {
+  padding: 0 16px 6px;
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(230,237,243,0.25);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.d4 .ambient-cards {
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.d4 .acard {
+  background: rgba(22,27,34,0.7);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.d4 .acard.lit {
+  background: rgba(45,30,6,0.8);
+  border-color: rgba(245,158,11,0.15);
+}
+.d4 .al { display: flex; align-items: center; gap: 10px; }
+.d4 .ai { font-size: 14px; }
+.d4 .am { display: flex; flex-direction: column; gap: 1px; }
+.d4 .an { font-size: 10px; font-weight: 600; }
+.d4 .as { font-size: 9px; color: rgba(230,237,243,0.4); }
+.d4 .ar { display: flex; align-items: center; gap: 6px; }
+.d4 .atog {
+  width: 26px; height: 15px; border-radius: 8px;
+  display: flex; align-items: center; padding: 2px;
+}
+.d4 .atok { width: 11px; height: 11px; border-radius: 50%; background: #fff; }
+.d4 .atog.on { background: #F59E0B; }
+.d4 .atog.on .atok { margin-left: auto; }
+.d4 .atog.off { background: #21262D; }
+.d4 .therm-row {
+  background: rgba(22,27,34,0.7);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 14px;
+  margin: 4px 12px 0;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.d4 .tl { display: flex; align-items: center; gap: 10px; }
+.d4 .tval { font-size: 20px; font-weight: 800; color: #F59E0B; }
+.d4 .tadj { font-size: 14px; color: rgba(230,237,243,0.35); font-weight: 700; }
+.d4 .nav {
+  margin-top: auto;
+  padding: 9px 16px 13px;
+  display: flex;
+  justify-content: space-around;
+  border-top: 1px solid #141920;
+  background: #090C12;
+}
+.d4 .ni {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: 7px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: rgba(230,237,243,0.3);
+}
+.d4 .ni.on { color: #F59E0B; }
+.d4 .ni-ic { font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>HaNative — Layout Direction Exploration · Deep + Warm</h1>
+
+<div class="grid">
+
+  <!-- ── D1: Grid + Bottom Nav ── -->
+  <div class="wrap">
+    <div class="dir-num">Direction 01</div>
+    <div class="dir-name">Grid + Bottom Nav</div>
+    <div class="phone d1">
+      <div class="sb"><span>9:41</span><span>●●●</span></div>
+      <div class="hdr">
+        <span class="hdr-t">Morning</span>
+        <div class="hdr-b">＋</div>
+      </div>
+      <div class="pill-row"><span class="pill"><span class="dot"></span>Local · 12ms</span></div>
+      <div class="cards">
+        <div class="card" style="background:#2D1E06">
+          <div class="ci">💡</div>
+          <div class="cl">Living Room</div>
+          <div class="cv acc">On · 80%</div>
+          <div class="tog on"><div class="tok"></div></div>
+        </div>
+        <div class="card">
+          <div class="ci">🔒</div>
+          <div class="cl">Front Door</div>
+          <div class="cv">Locked</div>
+          <div class="tog off"><div class="tok"></div></div>
+        </div>
+        <div class="card wide">
+          <div class="wl">
+            <div class="ci">🌡️</div>
+            <div class="cl">Thermostat</div>
+            <div class="cv">Heating</div>
+          </div>
+          <div class="wr">
+            <div class="tb">−</div>
+            <div class="tv acc">21°</div>
+            <div class="tb">＋</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="ci">☕</div>
+          <div class="cl">Coffee</div>
+          <div class="cv">Off</div>
+          <div class="tog off"><div class="tok"></div></div>
+        </div>
+        <div class="card">
+          <div class="ci">🚪</div>
+          <div class="cl">Back Door</div>
+          <div class="cv acc">Open</div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="ni on"><span class="ni-ic">⊞</span>Dash</div>
+        <div class="ni"><span class="ni-ic">☰</span>Rooms</div>
+        <div class="ni"><span class="ni-ic">⚙</span>Settings</div>
+      </div>
+    </div>
+    <div class="dir-desc">2-col card grid · Bottom tab nav<br>Familiar pattern · Scannable</div>
+  </div>
+
+  <!-- ── D2: Tabs + Full-width ── -->
+  <div class="wrap">
+    <div class="dir-num">Direction 02</div>
+    <div class="dir-name">Dashboard Tabs + List</div>
+    <div class="phone d2">
+      <div class="sb"><span>9:41</span><span>●●●</span></div>
+      <div class="dash-tabs">
+        <div class="tab on">Morning</div>
+        <div class="tab">Living Room</div>
+        <div class="tab">Pool</div>
+      </div>
+      <div class="pill-row"><span class="pill"><span class="dot"></span>Local · 12ms</span></div>
+      <div class="cards">
+        <div class="fw-card" style="background:#2D1E06">
+          <div class="fw-left">
+            <span style="font-size:16px">💡</span>
+            <div class="fw-meta">
+              <div style="font-size:10px;font-weight:700;color:#F59E0B">On · 80%</div>
+              <div style="font-size:8px;color:rgba(230,237,243,0.4)">Living Room</div>
+            </div>
+          </div>
+          <div class="tog on" style="width:28px;height:16px"><div class="tok" style="width:10px;height:10px"></div></div>
+        </div>
+        <div class="fw-card">
+          <div class="fw-left">
+            <span style="font-size:16px">🔒</span>
+            <div class="fw-meta">
+              <div style="font-size:10px;font-weight:700">Locked</div>
+              <div style="font-size:8px;color:rgba(230,237,243,0.4)">Front Door</div>
+            </div>
+          </div>
+          <div class="tog off" style="width:28px;height:16px"><div class="tok" style="width:10px;height:10px"></div></div>
+        </div>
+        <div class="fw-card">
+          <div class="fw-left">
+            <span style="font-size:16px">🌡️</span>
+            <div class="fw-meta">
+              <div style="font-size:10px;font-weight:700">Heating</div>
+              <div style="font-size:8px;color:rgba(230,237,243,0.4)">Thermostat</div>
+            </div>
+          </div>
+          <div class="fw-right">
+            <span class="adj">−</span>
+            <span class="therm-val acc">21°</span>
+            <span class="adj">＋</span>
+          </div>
+        </div>
+        <div class="fw-card">
+          <div class="fw-left">
+            <span style="font-size:16px">☕</span>
+            <div class="fw-meta">
+              <div style="font-size:10px;font-weight:700">Off</div>
+              <div style="font-size:8px;color:rgba(230,237,243,0.4)">Coffee Maker</div>
+            </div>
+          </div>
+          <div class="tog off" style="width:28px;height:16px"><div class="tok" style="width:10px;height:10px"></div></div>
+        </div>
+      </div>
+      <div class="bot">
+        <div class="context-badge">No Context Active</div>
+        <div class="add-btn">＋</div>
+      </div>
+    </div>
+    <div class="dir-desc">Dashboard tabs at top · Full-width list cards<br>More detail per entity · Clear switching</div>
+  </div>
+
+  <!-- ── D3: Hero + Mini Grid ── -->
+  <div class="wrap">
+    <div class="dir-num">Direction 03</div>
+    <div class="dir-name">Hero Card + Mini Grid</div>
+    <div class="phone d3">
+      <div class="sb"><span>9:41</span><span>●●●</span></div>
+      <div class="hdr">
+        <span class="hdr-t">Morning</span>
+        <div class="hdr-b">⊞</div>
+      </div>
+      <div class="pill-row"><span class="pill"><span class="dot"></span>Local · 12ms</span></div>
+      <div class="hero">
+        <div class="hero-left">
+          <div class="hero-icon">💡</div>
+          <div class="hero-label">Living Room</div>
+          <div class="hero-val acc" style="font-size:20px;font-weight:800">On</div>
+          <div class="hero-sub">80% brightness</div>
+        </div>
+        <div class="hero-right">
+          <div class="hero-tog"><div class="hero-tok"></div></div>
+          <div class="hero-pct">Tap to toggle</div>
+        </div>
+      </div>
+      <div class="sub-grid">
+        <div class="mini">
+          <div class="mi">🔒</div>
+          <div class="ml">Front Door</div>
+          <div class="mv">Locked</div>
+          <div class="mt off"><div class="mtk"></div></div>
+        </div>
+        <div class="mini">
+          <div class="mi">🌡️</div>
+          <div class="ml">Thermostat</div>
+          <div class="mv acc">21°</div>
+        </div>
+        <div class="mini">
+          <div class="mi">☕</div>
+          <div class="ml">Coffee</div>
+          <div class="mv">Off</div>
+          <div class="mt off"><div class="mtk"></div></div>
+        </div>
+        <div class="mini">
+          <div class="mi">🚪</div>
+          <div class="ml">Back Door</div>
+          <div class="mv acc">Open</div>
+        </div>
+        <div class="mini">
+          <div class="mi">📺</div>
+          <div class="ml">TV</div>
+          <div class="mv">Idle</div>
+          <div class="mt off"><div class="mtk"></div></div>
+        </div>
+        <div class="mini" style="background:#1C2333;border-radius:12px;align-items:center;justify-content:center">
+          <div style="font-size:16px;opacity:0.3">＋</div>
+          <div class="ml" style="text-align:center">Add card</div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="ni on"><span class="ni-ic">⊞</span>Dash</div>
+        <div class="ni"><span class="ni-ic">☰</span>Rooms</div>
+        <div class="ni"><span class="ni-ic">⚙</span>Settings</div>
+      </div>
+    </div>
+    <div class="dir-desc">Primary entity gets hero treatment<br>Secondary entities in compact grid</div>
+  </div>
+
+  <!-- ── D4: Minimal / Ambient ── -->
+  <div class="wrap">
+    <div class="dir-num">Direction 04</div>
+    <div class="dir-name">Minimal / Ambient</div>
+    <div class="phone d4 ambient-bg">
+      <div class="sb" style="color:rgba(230,237,243,0.3)"><span>9:41</span><span>●●●</span></div>
+      <div class="hdr">
+        <div>
+          <div class="hdr-t">Dashboard</div>
+          <div class="hdr-dash-name">Morning</div>
+        </div>
+        <div class="cog">⚙</div>
+      </div>
+      <div class="pill-row"><span class="pill"><span class="dot"></span>Local · 12ms</span></div>
+      <div class="section-label">Lights</div>
+      <div class="ambient-cards">
+        <div class="acard lit">
+          <div class="al">
+            <div class="ai">💡</div>
+            <div class="am">
+              <div class="an">Living Room</div>
+              <div class="as acc" style="color:#F59E0B">On · 80%</div>
+            </div>
+          </div>
+          <div class="ar">
+            <div class="atog on"><div class="atok"></div></div>
+          </div>
+        </div>
+        <div class="acard">
+          <div class="al">
+            <div class="ai">💡</div>
+            <div class="am">
+              <div class="an">Kitchen</div>
+              <div class="as">Off</div>
+            </div>
+          </div>
+          <div class="ar">
+            <div class="atog off"><div class="atok"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="section-label" style="padding:8px 16px 6px">Climate &amp; Security</div>
+      <div class="therm-row">
+        <div class="tl">
+          <span style="font-size:14px">🌡️</span>
+          <div>
+            <div style="font-size:10px;font-weight:600">Thermostat</div>
+            <div style="font-size:8px;color:rgba(230,237,243,0.4)">Heating</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="tadj">−</span>
+          <span class="tval">21°</span>
+          <span class="tadj">＋</span>
+        </div>
+      </div>
+      <div class="ambient-cards" style="padding:4px 12px 0">
+        <div class="acard">
+          <div class="al">
+            <div class="ai">🔒</div>
+            <div class="am">
+              <div class="an">Front Door</div>
+              <div class="as">Locked</div>
+            </div>
+          </div>
+          <div class="atog off"><div class="atok"></div></div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="ni on"><span class="ni-ic">⊞</span>Dash</div>
+        <div class="ni"><span class="ni-ic">☰</span>Rooms</div>
+        <div class="ni"><span class="ni-ic">⚙</span>Settings</div>
+      </div>
+    </div>
+    <div class="dir-desc">Grouped by entity type · Near-black bg<br>Recedes completely · Tool disappears</div>
+  </div>
+
+</div>
+</body>
+</html>
