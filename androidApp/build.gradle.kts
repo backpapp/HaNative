@@ -29,4 +29,8 @@ dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.koin.android)
+    implementation(libs.koin.compose)
+    implementation(libs.navigation3.runtime)
+    implementation(libs.navigation3.ui)
 }

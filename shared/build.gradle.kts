@@ -39,6 +39,48 @@ kotlin {
         commonMain.dependencies {
             implementation(compose.runtime)
             implementation(compose.foundation)
+
+            // Kotlin extensions
+            implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.kotlinx.datetime)
+
+            // Ktor (common)
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.websockets)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
+
+            // SQLDelight (common)
+            implementation(libs.sqldelight.runtime)
+            implementation(libs.sqldelight.coroutines)
+
+            // Koin (common)
+            implementation(libs.koin.core)
+
+            // DataStore (KMP, no platform split needed)
+            implementation(libs.datastore.preferences.core)
+
+            // Lifecycle ViewModel (KMP)
+            implementation(libs.lifecycle.viewmodel)
+
+
+        }
+
+        androidMain.dependencies {
+            // Ktor engine for Android
+            implementation(libs.ktor.client.cio)
+            // SQLDelight driver for Android
+            implementation(libs.sqldelight.android.driver)
+            // Koin Android
+            implementation(libs.koin.android)
+        }
+
+        iosMain.dependencies {
+            // Ktor engine for iOS/Darwin
+            implementation(libs.ktor.client.darwin)
+            // SQLDelight driver for iOS/Native
+            implementation(libs.sqldelight.native.driver)
         }
 
         commonTest.dependencies {

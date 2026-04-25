@@ -1,6 +1,6 @@
 # Story 1.2: Clean Architecture Package Structure & DI
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -18,44 +18,44 @@ so that every subsequent story drops code into the correct layer with zero impor
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `commonMain` package directory structure (AC: 1)
-  - [ ] Create `domain/model/` — add `.gitkeep` or empty `README` to track in git
-  - [ ] Create `domain/repository/` — same
-  - [ ] Create `domain/usecase/` — same
-  - [ ] Create `data/remote/dto/`
-  - [ ] Create `data/local/adapter/`
-  - [ ] Create `data/repository/`
-  - [ ] Create `di/`
-  - [ ] Create `ui/components/`
-  - [ ] Create `ui/navigation/`
-  - [ ] Create `platform/`
-  - [ ] All under base package `com/backpapp/hanative/` inside `shared/src/commonMain/kotlin/`
+- [x] Task 1: Create `commonMain` package directory structure (AC: 1)
+  - [x] Create `domain/model/` — add `.gitkeep` or empty `README` to track in git
+  - [x] Create `domain/repository/` — same
+  - [x] Create `domain/usecase/` — same
+  - [x] Create `data/remote/dto/`
+  - [x] Create `data/local/adapter/`
+  - [x] Create `data/repository/`
+  - [x] Create `di/`
+  - [x] Create `ui/components/`
+  - [x] Create `ui/navigation/`
+  - [x] Create `platform/`
+  - [x] All under base package `com/backpapp/hanative/` inside `shared/src/commonMain/kotlin/`
 
-- [ ] Task 2: Create empty Koin modules (AC: 2)
-  - [ ] `shared/src/commonMain/.../di/DataModule.kt` — `val dataModule = module { }` with import enforcement comment
-  - [ ] `shared/src/commonMain/.../di/DomainModule.kt` — same pattern
-  - [ ] `shared/src/commonMain/.../di/PresentationModule.kt` — same pattern
+- [x] Task 2: Create empty Koin modules (AC: 2)
+  - [x] `shared/src/commonMain/.../di/DataModule.kt` — `val dataModule = module { }` with import enforcement comment
+  - [x] `shared/src/commonMain/.../di/DomainModule.kt` — same pattern
+  - [x] `shared/src/commonMain/.../di/PresentationModule.kt` — same pattern
 
-- [ ] Task 3: Wire Koin in platform entry points (AC: 2)
-  - [ ] Create `androidApp/src/main/java/com/backpapp/hanative/HaNativeApplication.kt` — calls `startKoin { modules(dataModule, domainModule, presentationModule) }`
-  - [ ] Register `HaNativeApplication` in `AndroidManifest.xml` via `android:name`
-  - [ ] Update `iosApp/iosApp/iOSApp.swift` — call Koin init before scene body (see pattern below)
+- [x] Task 3: Wire Koin in platform entry points (AC: 2)
+  - [x] Create `androidApp/src/main/java/com/backpapp/hanative/HaNativeApplication.kt` — calls `startKoin { modules(dataModule, domainModule, presentationModule) }`
+  - [x] Register `HaNativeApplication` in `AndroidManifest.xml` via `android:name`
+  - [x] Update `iosApp/iosApp/iOSApp.swift` — call Koin init before scene body (see pattern below)
 
-- [ ] Task 4: Wire all core dependencies into `:shared/build.gradle.kts` (AC: 3)
-  - [ ] `commonMain` sourceset: `kotlinx-coroutines-core`, `kotlinx-serialization-json`, `kotlinx-datetime`, `ktor-client-core`, `ktor-client-websockets`, `ktor-client-content-negotiation`, `ktor-serialization-kotlinx-json`, `sqldelight-runtime`, `sqldelight-coroutines`, `koin-core`, `datastore-preferences-core`, `lifecycle-viewmodel`, `navigation3-runtime`, `navigation3-ui`
-  - [ ] `androidMain` sourceset: `ktor-client-cio`, `sqldelight-android-driver`, `koin-android`
-  - [ ] `iosMain` sourceset: `ktor-client-darwin`, `sqldelight-native-driver`
-  - [ ] `:androidApp/build.gradle.kts`: add `androidx-core-ktx`, `androidx-activity-compose`, `koin-android`, `koin-compose`
-  - [ ] Run `./gradlew dependencies` to verify all deps resolve with no conflicts
+- [x] Task 4: Wire all core dependencies into `:shared/build.gradle.kts` (AC: 3)
+  - [x] `commonMain` sourceset: `kotlinx-coroutines-core`, `kotlinx-serialization-json`, `kotlinx-datetime`, `ktor-client-core`, `ktor-client-websockets`, `ktor-client-content-negotiation`, `ktor-serialization-kotlinx-json`, `sqldelight-runtime`, `sqldelight-coroutines`, `koin-core`, `datastore-preferences-core`, `lifecycle-viewmodel`, `navigation3-runtime`, `navigation3-ui`
+  - [x] `androidMain` sourceset: `ktor-client-cio`, `sqldelight-android-driver`, `koin-android`
+  - [x] `iosMain` sourceset: `ktor-client-darwin`, `sqldelight-native-driver`
+  - [x] `:androidApp/build.gradle.kts`: add `androidx-core-ktx`, `androidx-activity-compose`, `koin-android`, `koin-compose`
+  - [x] Run `./gradlew dependencies` to verify all deps resolve with no conflicts
 
-- [ ] Task 5: Add import enforcement comment blocks (AC: 4)
-  - [ ] In `domain/model/`, `domain/repository/`, `domain/usecase/`: add a `PackageInfo.kt` (or `DomainLayerRules.kt`) with the enforcement comment block
-  - [ ] Verify Detekt config (if present) enforces layer boundaries — skip if Detekt not yet configured
+- [x] Task 5: Add import enforcement comment blocks (AC: 4)
+  - [x] In `domain/model/`, `domain/repository/`, `domain/usecase/`: add a `PackageInfo.kt` (or `DomainLayerRules.kt`) with the enforcement comment block
+  - [x] Verify Detekt config (if present) enforces layer boundaries — skip if Detekt not yet configured
 
-- [ ] Task 6: Verify builds (AC: 5)
-  - [ ] `./gradlew :androidApp:assembleDebug` — must succeed
-  - [ ] `./gradlew :shared:testDebugUnitTest` — must succeed
-  - [ ] No unresolved references or dependency conflicts in build output
+- [x] Task 6: Verify builds (AC: 5)
+  - [x] `./gradlew :androidApp:assembleDebug` — must succeed
+  - [x] `./gradlew :shared:testDebugUnitTest` — must succeed
+  - [x] No unresolved references or dependency conflicts in build output
 
 ## Dev Notes
 
@@ -232,6 +232,58 @@ claude-sonnet-4-6
 
 ### Debug Log References
 
+- navigation3 version `2.9.0-alpha07` not published to Google Maven → fixed to stable `1.0.0`.
+- navigation3-runtime/ui have no KMP/iOS variant → moved from `shared/commonMain` to `androidApp/build.gradle.kts` (Android-only library; actual nav scaffolding deferred to Story 1.4).
+
 ### Completion Notes List
 
+- All 10 commonMain package dirs created under `shared/src/commonMain/kotlin/com/backpapp/hanative/`. Empty dirs tracked via `.gitkeep`. Domain dirs get `PackageInfo.kt` instead of `.gitkeep`.
+- Three empty Koin modules (`dataModule`, `domainModule`, `presentationModule`) created in `di/` — no bindings.
+- Android: `HaNativeApplication.kt` created, registered in `AndroidManifest.xml` via `android:name`.
+- iOS: `KoinHelper.kt` in `iosMain`, `iOSApp.swift` calls `KoinHelperKt.doInitKoin()` before scene body. (`init` prefix → `do` prefix in ObjC bridge.)
+- All V1 deps wired into `shared/build.gradle.kts` (commonMain/androidMain/iosMain) and `androidApp/build.gradle.kts`.
+- Import enforcement comment block in `PackageInfo.kt` in each domain sub-package.
+- `./gradlew :androidApp:assembleDebug` ✅ `./gradlew :shared:testDebugUnitTest` ✅
+
+### Change Log
+
+- 2026-04-25: Story 1.2 implemented — Clean Architecture package structure + Koin DI skeleton. Fixed navigation3 version to 1.0.0.
+
 ### File List
+
+- shared/src/commonMain/kotlin/com/backpapp/hanative/domain/model/.gitkeep
+- shared/src/commonMain/kotlin/com/backpapp/hanative/domain/model/PackageInfo.kt
+- shared/src/commonMain/kotlin/com/backpapp/hanative/domain/repository/.gitkeep
+- shared/src/commonMain/kotlin/com/backpapp/hanative/domain/repository/PackageInfo.kt
+- shared/src/commonMain/kotlin/com/backpapp/hanative/domain/usecase/.gitkeep
+- shared/src/commonMain/kotlin/com/backpapp/hanative/domain/usecase/PackageInfo.kt
+- shared/src/commonMain/kotlin/com/backpapp/hanative/data/remote/dto/.gitkeep
+- shared/src/commonMain/kotlin/com/backpapp/hanative/data/local/adapter/.gitkeep
+- shared/src/commonMain/kotlin/com/backpapp/hanative/data/repository/.gitkeep
+- shared/src/commonMain/kotlin/com/backpapp/hanative/di/DataModule.kt
+- shared/src/commonMain/kotlin/com/backpapp/hanative/di/DomainModule.kt
+- shared/src/commonMain/kotlin/com/backpapp/hanative/di/PresentationModule.kt
+- shared/src/commonMain/kotlin/com/backpapp/hanative/ui/components/.gitkeep
+- shared/src/commonMain/kotlin/com/backpapp/hanative/ui/navigation/.gitkeep
+- shared/src/commonMain/kotlin/com/backpapp/hanative/platform/.gitkeep
+- shared/src/iosMain/kotlin/com/backpapp/hanative/KoinHelper.kt
+- shared/build.gradle.kts
+- androidApp/build.gradle.kts
+- androidApp/src/main/java/com/backpapp/hanative/HaNativeApplication.kt
+- androidApp/src/main/AndroidManifest.xml
+- iosApp/iosApp/iOSApp.swift
+- gradle/libs.versions.toml
+
+### Review Findings
+
+- [x] [Review][Patch] navigation3-runtime/ui in shared commonMain — confirmed already moved to androidApp/build.gradle.kts by dev agent; shared commonMain clean. [shared/build.gradle.kts, androidApp/build.gradle.kts]
+- [x] [Review][Patch] startKoin double-init guard missing — added GlobalContext.getOrNull() guard in HaNativeApplication.kt and KoinHelper.kt. [HaNativeApplication.kt, KoinHelper.kt]
+- [x] [Review][Patch] .gitkeep present in domain/ dirs alongside PackageInfo.kt — deleted domain/model/.gitkeep, domain/repository/.gitkeep, domain/usecase/.gitkeep. [shared/src/commonMain/kotlin/com/backpapp/hanative/domain/]
+- [x] [Review][Defer] koin.android declared in both androidApp and shared:androidMain — spec-compliant, Gradle deduplicates; no action needed now — deferred, pre-existing
+- [x] [Review][Defer] iOS Koin init in App.init() before UIApplication ready — safe with empty modules now; latent risk when modules bind platform APIs — deferred, pre-existing
+- [x] [Review][Defer] DataStore iOS storage path wiring missing — no platform-specific OkioStorage config; safe now (not instantiated); required when DataStore is used in a later story — deferred, pre-existing
+- [x] [Review][Defer] koin-compose not in shared module — needed only when shared composables use DI injection; not yet required — deferred, pre-existing
+- [x] [Review][Defer] SQLDelight plugin not applied in shared/build.gradle.kts — intentional scaffold; .sq files and plugin wiring come in a later story — deferred, pre-existing
+- [x] [Review][Defer] lifecycle-viewmodel:2.9.0 iOS/native KMP artifact unverified — iOS build not run in this story; verify when iOS build pipeline is added — deferred, pre-existing
+- [x] [Review][Defer] ktor-client-cio TLS gaps on Android API < 29 — latent WebSocket risk; evaluate and switch to OkHttp engine when networking implemented in a later story — deferred, pre-existing
+- [x] [Review][Defer] iOS Koin init on main thread — deadlock risk if future module factories use runBlocking or I/O; safe with empty modules now — deferred, pre-existing

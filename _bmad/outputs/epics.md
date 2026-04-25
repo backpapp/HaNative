@@ -191,7 +191,7 @@ Users get automatic dashboard switching based on live home state, wall tablet ki
 
 Compilable, runnable three-module KMP + CMP project with full Clean Architecture skeleton, HA source components ported, CI/CD pipelines, and HA upstream diff watcher. Every subsequent epic builds on this base.
 
-### Story 1.1: KMP Wizard Project Scaffold
+### ✅ Story 1.1: KMP Wizard Project Scaffold
 
 As a developer,
 I want a correctly structured three-module KMP + CMP project,
