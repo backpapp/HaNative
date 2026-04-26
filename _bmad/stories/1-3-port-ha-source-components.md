@@ -1,6 +1,6 @@
 # Story 1.3: Port HA Source Components
 
-Status: review
+Status: done
 
 ## Story
 
@@ -180,21 +180,21 @@ claude-sonnet-4-6
 
 ### Review Findings
 
-- [ ] [Review][Patch] Remove httpClient from AuthenticationRepositoryImpl constructor (unused); remove dead CompletableDeferred/refreshJob machinery; simplify getValidToken() to direct CredentialStore read under Mutex [AuthenticationRepositoryImpl.kt]
-- [ ] [Review][Patch] Change HaEvent.StateChanged.lastChanged/lastUpdated and HaRawEntityState.lastChanged/lastUpdated from String to kotlinx.datetime.Instant; parse at deserialization in KtorHaWebSocketClient.handleEvent() [HaEvent.kt, HaWebSocketClient.kt, KtorHaWebSocketClient.kt]
+- [x] [Review][Patch] Remove httpClient from AuthenticationRepositoryImpl constructor (unused); remove dead CompletableDeferred/refreshJob machinery; simplify getValidToken() to direct CredentialStore read under Mutex [AuthenticationRepositoryImpl.kt]
+- [x] [Review][Patch] Change HaEvent.StateChanged.lastChanged/lastUpdated and HaRawEntityState.lastChanged/lastUpdated from String to kotlinx.datetime.Instant; parse at deserialization in KtorHaWebSocketClient.handleEvent() [HaEvent.kt, HaWebSocketClient.kt, KtorHaWebSocketClient.kt]
 
-- [ ] [Review][Patch] pendingResults map unsynchronized concurrent access [KtorHaWebSocketClient.kt]
-- [ ] [Review][Patch] pendingResults entries leaked and callers hang forever on disconnect — no channel close on disconnect, no withTimeout on receive() [KtorHaWebSocketClient.kt:disconnect()]
-- [ ] [Review][Patch] session race: double-connect leaks old receive loop; no @Volatile on session var [KtorHaWebSocketClient.kt:connect()]
-- [ ] [Review][Patch] Reconnect loop competing instances — attemptConnect.onFailure calls scheduleReconnect which self-cancels current job [ServerManager.kt:scheduleReconnect()]
-- [ ] [Review][Patch] ha-upstream-refs/ untracked — AC7 not committed to repo [git add + commit required]
-- [ ] [Review][Patch] callService silently drops serviceData parameter — never passed to CallServiceCommandDto [KtorHaWebSocketClient.kt:callService()]
-- [ ] [Review][Patch] handleFrame calls nextId() (suspend+mutex) on receive loop — blocks frame processing while counterMutex held by callService; near-deadlock [KtorHaWebSocketClient.kt:handleFrame()]
-- [ ] [Review][Patch] Intentional disconnect() triggers reconnect — receive loop emits ConnectionLost after session.close(), races with _connectionState=Disconnected [KtorHaWebSocketClient.kt + ServerManager.kt]
-- [ ] [Review][Patch] _events SharedFlow silently drops ConnectionLost/ConnectionError under backpressure (extraBufferCapacity=64, DROP_OLDEST) [KtorHaWebSocketClient.kt]
-- [ ] [Review][Patch] URL scheme replacement order-sensitive — should anchor to start of string [KtorHaWebSocketClient.kt:connect()]
-- [ ] [Review][Patch] handleResult trySend silently drops result if channel full — caller hangs [KtorHaWebSocketClient.kt:handleResult()]
-- [ ] [Review][Patch] Test count 20 vs spec task target of 22 — Cover.currentPosition, BinarySensor.deviceClass, Script.isRunning, Light.colorTemp/rgbColor, Climate.targetTemperature/hvacMode uncovered [HaEntityTest.kt]
+- [x] [Review][Patch] pendingResults map unsynchronized concurrent access [KtorHaWebSocketClient.kt]
+- [x] [Review][Patch] pendingResults entries leaked and callers hang forever on disconnect — no channel close on disconnect, no withTimeout on receive() [KtorHaWebSocketClient.kt:disconnect()]
+- [x] [Review][Patch] session race: double-connect leaks old receive loop; no @Volatile on session var [KtorHaWebSocketClient.kt:connect()]
+- [x] [Review][Patch] Reconnect loop competing instances — attemptConnect.onFailure calls scheduleReconnect which self-cancels current job [ServerManager.kt:scheduleReconnect()]
+- [x] [Review][Patch] ha-upstream-refs/ untracked — AC7 not committed to repo [git add + commit required]
+- [x] [Review][Patch] callService silently drops serviceData parameter — never passed to CallServiceCommandDto [KtorHaWebSocketClient.kt:callService()]
+- [x] [Review][Patch] handleFrame calls nextId() (suspend+mutex) on receive loop — blocks frame processing while counterMutex held by callService; near-deadlock [KtorHaWebSocketClient.kt:handleFrame()]
+- [x] [Review][Patch] Intentional disconnect() triggers reconnect — receive loop emits ConnectionLost after session.close(), races with _connectionState=Disconnected [KtorHaWebSocketClient.kt + ServerManager.kt]
+- [x] [Review][Patch] _events SharedFlow silently drops ConnectionLost/ConnectionError under backpressure (extraBufferCapacity=64, DROP_OLDEST) [KtorHaWebSocketClient.kt]
+- [x] [Review][Patch] URL scheme replacement order-sensitive — should anchor to start of string [KtorHaWebSocketClient.kt:connect()]
+- [x] [Review][Patch] handleResult trySend silently drops result if channel full — caller hangs [KtorHaWebSocketClient.kt:handleResult()]
+- [x] [Review][Patch] Test count 20 vs spec task target of 22 — Cover.currentPosition, BinarySensor.deviceClass, Script.isRunning, Light.colorTemp/rgbColor, Climate.targetTemperature/hvacMode uncovered [HaEntityTest.kt]
 
 - [x] [Review][Defer] AuthenticationRepositoryImpl has no domain interface; ServerManager couples to concrete type [ServerManager.kt:15] — deferred, pre-existing architecture gap
 - [x] [Review][Defer] MapAnySerializer.toJsonElement() unknown types serialized via toString() — silent type corruption for Set/custom objects [MapAnySerializer.kt] — deferred, low real-world impact for HA wire format
