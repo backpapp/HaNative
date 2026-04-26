@@ -57,7 +57,6 @@ class KtorHaWebSocketClient(
     private var counter = 1
     private suspend fun nextId(): Int = counterMutex.withLock { counter++ }
 
-    @Volatile
     private var session: DefaultClientWebSocketSession? = null
 
     private val json = Json {
