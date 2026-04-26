@@ -10,6 +10,10 @@ plugins {
 }
 
 kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
     android {
         namespace = "com.backpapp.hanative.shared"
         compileSdk = 36

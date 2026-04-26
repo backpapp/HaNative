@@ -1,0 +1,52 @@
+NOTICE
+
+HaNative includes code ported and adapted from the following open source projects.
+
+================================================================================
+
+Home Assistant Android
+https://github.com/home-assistant/android
+Copyright 2019-2024 Home Assistant Contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Ported components (KMP-idiomatic adaptations, not verbatim copies):
+- Entity model → HaEntity.kt (sealed class hierarchy with kotlinx.datetime)
+- WebSocket client → KtorHaWebSocketClient.kt (OkHttp → Ktor)
+- Authentication → AuthenticationRepositoryImpl.kt (Retrofit → Ktor HttpClient)
+- WS message types → data/remote/entities/ (Gson/Moshi → kotlinx.serialization)
+- MapAnySerializer.kt (verbatim port — pure kotlinx.serialization)
+
+================================================================================
+
+Home Assistant iOS
+https://github.com/home-assistant/iOS
+Copyright 2019-2024 Home Assistant Contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Ported components (KMP-idiomatic adaptations):
+- Token refresh deduplication pattern → AuthenticationRepositoryImpl.kt
+  (Swift DispatchQueue/Promise → Kotlin Mutex/Deferred)
+- mDNS discovery pattern → IosServerDiscovery.kt (Story 3.2)
+  (NSNetServiceBrowser interop)
