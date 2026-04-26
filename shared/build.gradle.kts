@@ -68,6 +68,8 @@ kotlin {
             // Lifecycle ViewModel (KMP)
             implementation(libs.lifecycle.viewmodel)
 
+            // Navigation 3 (KMP — JetBrains multiplatform artifact, works on Android + iOS + Desktop + Web)
+            implementation(libs.navigation3.ui)
 
         }
 

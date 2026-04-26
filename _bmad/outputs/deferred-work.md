@@ -18,3 +18,9 @@
 - **InternalSerializationApi opt-in in MapAnySerializer** — required for `buildSerialDescriptor` with `SerialKind.CONTEXTUAL`; fragile against future kotlinx.serialization upgrades. Track when upgrading serialization library version.
 - **counter integer overflow in nextId()** — `counter++` wraps to Int.MIN_VALUE after ~2B calls; negligible probability within a session lifetime. Use `if (counter == Int.MAX_VALUE) 1 else counter + 1` when refactoring KtorHaWebSocketClient.
 - **entityId.substringBefore(".") no-dot edge case** — malformed entity id without dot falls to `HaEntity.Unknown` with full string as domain. Safe fallback; acceptable for current scope.
+
+## Deferred from: code review of 1-4-compose-navigation-3-platform-entry-points (2026-04-26)
+
+- **Custom `WindowSizeClass` enum vs Jetpack type** — Hand-rolled `enum class WindowSizeClass` in `LocalWindowSizeClass.kt` duplicates `androidx.compose.material3.windowsizeclass.WindowSizeClass` with identical breakpoints. Intentional placeholder; Story 2.4 replaces with full `androidx.window` integration.
+- **`remember(screenWidthDp)` key misses height-only resize** — `MainActivity` keys `WindowSizeClass` computation on `screenWidthDp` only; height-only resize (foldables, split-screen) does not recompute. Acceptable for Story 1.x placeholder; Story 2.4 replaces whole mechanism with lifecycle-aware window metrics.
+- **`@Serializable` routes — no state restoration wired** — `OnboardingRoute`/`DashboardRoute` are `@Serializable` but `rememberNavBackStack` has no `Saver` for process-death restoration. Nav3 requires `@Serializable` for type-safe routing; full back-stack persistence is a future concern.

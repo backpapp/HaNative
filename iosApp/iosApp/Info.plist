@@ -29,5 +29,12 @@
     </dict>
     <key>UILaunchScreen</key>
     <dict/>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Connect directly to your Home Assistant instance on your local network.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_home-assistant._tcp</string>
+        <string>_hass-mobile-app._tcp</string>
+    </array>
 </dict>
 </plist>
