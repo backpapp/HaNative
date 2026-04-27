@@ -2,7 +2,9 @@ package com.backpapp.hanative.platform
 
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.UByteVar
 import kotlinx.cinterop.alloc
+import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.readBytes
@@ -39,8 +41,12 @@ private const val ACCOUNT = "ha_auth_token"
 class IosCredentialStore : CredentialStore {
 
     override suspend fun saveToken(token: String) {
-        val ubytes = token.encodeToByteArray().asUByteArray()
-        val cfData = CFDataCreate(null, ubytes.refTo(0), ubytes.size.toLong()) ?: return
+        val bytes = token.encodeToByteArray()
+        val cfData = memScoped {
+            val buf = allocArray<UByteVar>(bytes.size)
+            bytes.forEachIndexed { i, b -> buf[i] = b.toUByte() }
+            CFDataCreate(null, buf, bytes.size.toLong())
+        } ?: return
         SecItemDelete(baseQuery())
         val addQuery = baseQuery()?.also { dict ->
             CFDictionarySetValue(dict, kSecValueData, cfData)
