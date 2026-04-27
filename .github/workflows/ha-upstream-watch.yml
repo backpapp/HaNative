@@ -1,0 +1,113 @@
+name: HA Upstream Watch
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Sunday 00:00 UTC
+  workflow_dispatch:
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure ha-upstream-change label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label list --json name --jq '.[].name' | grep -q "^ha-upstream-change$" || \
+            gh label create "ha-upstream-change" \
+              --description "HA upstream source file changed" \
+              --color "E4E669"
+
+      - name: Diff upstream files against snapshots
+        id: diff
+        run: |
+          ANDROID_BASE="https://raw.githubusercontent.com/home-assistant/android/main"
+          IOS_BASE="https://raw.githubusercontent.com/home-assistant/iOS/main"
+
+          NL=$'\n'
+          CHANGED=false
+          BODY="# HA Upstream Change Detected${NL}${NL}**Date:** $(date -u +%Y-%m-%d)${NL}${NL}"
+          BODY+="Review each diff below. If the upstream change affects a ported component, update the KMP port and refresh the snapshot.${NL}${NL}"
+
+          check_file() {
+            local local_path="$1"
+            local upstream_url="$2"
+            local http_code curl_exit full_diff file_diff line_count
+            local tmp_file
+            tmp_file=$(mktemp)
+
+            http_code=$(curl -s -o "$tmp_file" -w "%{http_code}" "$upstream_url")
+            curl_exit=$?
+
+            if [ $curl_exit -ne 0 ] || [ "$http_code" != "200" ]; then
+              BODY+="### ⚠️ \`$local_path\` — fetch failed (HTTP $http_code, curl exit $curl_exit)${NL}${NL}"
+              rm -f "$tmp_file"
+              return
+            fi
+
+            if ! diff -q "$local_path" "$tmp_file" > /dev/null 2>&1; then
+              CHANGED=true
+              full_diff=$(diff "$local_path" "$tmp_file")
+              line_count=$(printf '%s\n' "$full_diff" | wc -l)
+              file_diff=$(printf '%s\n' "$full_diff" | head -150)
+              if [ "$line_count" -gt 150 ]; then
+                file_diff+="${NL}... ($((line_count - 150)) lines truncated)"
+              fi
+              BODY+="### \`$local_path\`${NL}\`\`\`diff${NL}$file_diff${NL}\`\`\`${NL}${NL}"
+            fi
+            rm -f "$tmp_file"
+          }
+
+          # Android — 4 files
+          check_file \
+            "ha-upstream-refs/android/Entity.kt" \
+            "${ANDROID_BASE}/common/src/main/kotlin/io/homeassistant/companion/android/common/data/integration/Entity.kt"
+
+          check_file \
+            "ha-upstream-refs/android/WebSocketCoreImpl.kt" \
+            "${ANDROID_BASE}/common/src/main/kotlin/io/homeassistant/companion/android/common/data/websocket/impl/WebSocketCoreImpl.kt"
+
+          check_file \
+            "ha-upstream-refs/android/AuthenticationRepositoryImpl.kt" \
+            "${ANDROID_BASE}/common/src/main/kotlin/io/homeassistant/companion/android/common/data/authentication/impl/AuthenticationRepositoryImpl.kt"
+
+          check_file \
+            "ha-upstream-refs/android/MapAnySerializer.kt" \
+            "${ANDROID_BASE}/common/src/main/kotlin/io/homeassistant/companion/android/common/data/integration/impl/entities/MapAnySerializer.kt"
+
+          # iOS — 3 files
+          check_file \
+            "ha-upstream-refs/ios/TokenManager.swift" \
+            "${IOS_BASE}/Sources/Shared/API/Authentication/TokenManager.swift"
+
+          check_file \
+            "ha-upstream-refs/ios/Bonjour.swift" \
+            "${IOS_BASE}/Sources/App/Onboarding/API/Bonjour.swift"
+
+          check_file \
+            "ha-upstream-refs/ios/WebSocketMessage.swift" \
+            "${IOS_BASE}/Sources/Shared/API/Models/WebSocketMessage.swift"
+
+          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
+          {
+            echo "body<<HA_WATCH_EOF"
+            printf '%s' "$BODY"
+            echo "HA_WATCH_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open GitHub issue
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_BODY: ${{ steps.diff.outputs.body }}
+        run: |
+          gh issue create \
+            --title "HA upstream change detected — $(date -u +%Y-%m-%d)" \
+            --body "$ISSUE_BODY" \
+            --label "ha-upstream-change"

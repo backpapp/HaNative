@@ -24,3 +24,10 @@
 - **Custom `WindowSizeClass` enum vs Jetpack type** — Hand-rolled `enum class WindowSizeClass` in `LocalWindowSizeClass.kt` duplicates `androidx.compose.material3.windowsizeclass.WindowSizeClass` with identical breakpoints. Intentional placeholder; Story 2.4 replaces with full `androidx.window` integration.
 - **`remember(screenWidthDp)` key misses height-only resize** — `MainActivity` keys `WindowSizeClass` computation on `screenWidthDp` only; height-only resize (foldables, split-screen) does not recompute. Acceptable for Story 1.x placeholder; Story 2.4 replaces whole mechanism with lifecycle-aware window metrics.
 - **`@Serializable` routes — no state restoration wired** — `OnboardingRoute`/`DashboardRoute` are `@Serializable` but `rememberNavBackStack` has no `Saver` for process-death restoration. Nav3 requires `@Serializable` for type-safe routing; full back-stack persistence is a future concern.
+
+## Deferred from: code review of 1-5-github-actions-ci-ha-upstream-diff-watcher (2026-04-27)
+
+- **`workflow_dispatch` has no `ref` input** — manual runs always diff against the default branch snapshot; cannot target a feature branch with updated snapshots for pre-merge validation. Add `inputs.ref` when branch-based manual validation is needed.
+- **Action `uses:` not pinned to commit SHAs** — all three workflow files use floating version tags (`@v4`); supply-chain best practice for workflows with `issues: write` + `GITHUB_TOKEN` is SHA pinning. Harden when security posture requires it.
+- **No `timeout-minutes` on any job** — a hung Gradle daemon, stalled `xcodebuild`, or `curl` that never completes will consume runner minutes until GitHub's 6-hour default timeout. Add per-job timeouts (30 min Android, 45 min iOS) when CI costs become a concern.
+- **`macos-latest` non-pinned runner** — Xcode version may change silently on GitHub runner image updates, potentially breaking the iOS build without a code change. Pin to a specific `macos-15` or similar when build reproducibility is required.
