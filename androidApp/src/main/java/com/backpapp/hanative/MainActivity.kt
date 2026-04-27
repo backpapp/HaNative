@@ -22,11 +22,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val m3SizeClass = calculateWindowSizeClass(this)
-            val windowSizeClass = when (m3SizeClass.widthSizeClass) {
-                WindowWidthSizeClass.Compact -> WindowSizeClass.COMPACT
-                WindowWidthSizeClass.Medium -> WindowSizeClass.MEDIUM
-                WindowWidthSizeClass.Expanded -> WindowSizeClass.EXPANDED
-                else -> WindowSizeClass.COMPACT
+            val windowSizeClass = remember(m3SizeClass.widthSizeClass) {
+                when (m3SizeClass.widthSizeClass) {
+                    WindowWidthSizeClass.Compact -> WindowSizeClass.COMPACT
+                    WindowWidthSizeClass.Medium -> WindowSizeClass.MEDIUM
+                    WindowWidthSizeClass.Expanded -> WindowSizeClass.EXPANDED
+                    else -> WindowSizeClass.COMPACT
+                }
             }
             val hapticEngine = remember { GlobalContext.get().get<HapticEngine>() }
             HaNativeTheme {

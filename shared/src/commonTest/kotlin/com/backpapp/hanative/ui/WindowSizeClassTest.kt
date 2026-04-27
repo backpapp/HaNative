@@ -23,11 +23,8 @@ class WindowSizeClassTest {
     }
 
     @Test
-    fun windowSizeClass_localDefaultIsCompact() {
-        // LocalWindowSizeClass is declared with staticCompositionLocalOf { WindowSizeClass.COMPACT }
-        // The default factory is not directly callable outside Compose, but we verify the
-        // enum value used as the default exists and is COMPACT.
-        assertNotNull(WindowSizeClass.COMPACT)
+    fun windowSizeClass_compactOrdinalIsZero() {
+        assertEquals(0, WindowSizeClass.COMPACT.ordinal)
     }
 
     @Test
