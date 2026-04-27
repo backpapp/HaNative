@@ -4,9 +4,13 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
+import kotlinx.cinterop.reinterpret
+import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
-import platform.CoreFoundation.CFBridgingRelease
-import platform.CoreFoundation.CFBridgingRetain
+import platform.CoreFoundation.CFDataCreate
+import platform.CoreFoundation.CFDataGetBytePtr
+import platform.CoreFoundation.CFDataGetLength
+import platform.CoreFoundation.CFDataRef
 import platform.CoreFoundation.CFDictionaryCreateMutable
 import platform.CoreFoundation.CFDictionarySetValue
 import platform.CoreFoundation.CFMutableDictionaryRef
@@ -14,11 +18,6 @@ import platform.CoreFoundation.CFStringCreateWithCString
 import platform.CoreFoundation.CFTypeRefVar
 import platform.CoreFoundation.kCFBooleanTrue
 import platform.CoreFoundation.kCFStringEncodingUTF8
-import platform.Foundation.NSData
-import platform.Foundation.NSString
-import platform.Foundation.NSUTF8StringEncoding
-import platform.Foundation.create
-import platform.Foundation.dataUsingEncoding
 import platform.Security.SecItemAdd
 import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
@@ -39,10 +38,13 @@ private const val ACCOUNT = "ha_auth_token"
 class IosCredentialStore : CredentialStore {
 
     override suspend fun saveToken(token: String) {
-        val tokenData = (token as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return
+        val bytes = token.encodeToByteArray()
+        val cfData = bytes.usePinned { pinned ->
+            CFDataCreate(null, pinned.addressOf(0).reinterpret(), bytes.size.toLong())
+        } ?: return
         SecItemDelete(baseQuery())
         val addQuery = baseQuery()?.also { dict ->
-            CFDictionarySetValue(dict, kSecValueData, CFBridgingRetain(tokenData))
+            CFDictionarySetValue(dict, kSecValueData, cfData)
         }
         SecItemAdd(addQuery, null)
     }
@@ -56,8 +58,11 @@ class IosCredentialStore : CredentialStore {
             val result = alloc<CFTypeRefVar>()
             val status = SecItemCopyMatching(query, result.ptr)
             if (status != errSecSuccess) return null
-            val data = CFBridgingRelease(result.value) as? NSData ?: return null
-            return NSString.create(data, NSUTF8StringEncoding) as? String
+            @Suppress("UNCHECKED_CAST")
+            val cfData = result.value as? CFDataRef ?: return null
+            val length = CFDataGetLength(cfData).toInt()
+            val ptr = CFDataGetBytePtr(cfData) ?: return null
+            return ByteArray(length) { ptr[it] }.decodeToString()
         }
     }
 
