@@ -4,7 +4,6 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
-import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFDataCreate
@@ -38,9 +37,9 @@ private const val ACCOUNT = "ha_auth_token"
 class IosCredentialStore : CredentialStore {
 
     override suspend fun saveToken(token: String) {
-        val bytes = token.encodeToByteArray()
-        val cfData = bytes.usePinned { pinned ->
-            CFDataCreate(null, pinned.addressOf(0).reinterpret(), bytes.size.toLong())
+        val ubytes = token.encodeToByteArray().asUByteArray()
+        val cfData = ubytes.usePinned { pinned ->
+            CFDataCreate(null, pinned.addressOf(0), ubytes.size.toLong())
         } ?: return
         SecItemDelete(baseQuery())
         val addQuery = baseQuery()?.also { dict ->
@@ -62,7 +61,7 @@ class IosCredentialStore : CredentialStore {
             val cfData = result.value as? CFDataRef ?: return null
             val length = CFDataGetLength(cfData).toInt()
             val ptr = CFDataGetBytePtr(cfData) ?: return null
-            return ByteArray(length) { ptr[it] }.decodeToString()
+            return ByteArray(length) { ptr[it].toByte() }.decodeToString()
         }
     }
 
