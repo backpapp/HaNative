@@ -5,8 +5,16 @@ import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.value
+import platform.CoreFoundation.CFBridgingRelease
+import platform.CoreFoundation.CFBridgingRetain
+import platform.CoreFoundation.CFDictionaryCreateMutable
+import platform.CoreFoundation.CFDictionarySetValue
+import platform.CoreFoundation.CFMutableDictionaryRef
+import platform.CoreFoundation.CFStringCreateWithCString
+import platform.CoreFoundation.CFTypeRefVar
+import platform.CoreFoundation.kCFBooleanTrue
+import platform.CoreFoundation.kCFStringEncodingUTF8
 import platform.Foundation.NSData
-import platform.Foundation.NSMutableDictionary
 import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.create
@@ -32,24 +40,23 @@ class IosCredentialStore : CredentialStore {
 
     override suspend fun saveToken(token: String) {
         val tokenData = (token as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return
-        // Delete existing before add (SecItemUpdate not needed for simplicity)
         SecItemDelete(baseQuery())
-        val addQuery = baseQuery().apply {
-            setObject(tokenData, forKey = kSecValueData)
+        val addQuery = baseQuery()?.also { dict ->
+            CFDictionarySetValue(dict, kSecValueData, CFBridgingRetain(tokenData))
         }
         SecItemAdd(addQuery, null)
     }
 
     override suspend fun getToken(): String? {
-        val query = baseQuery().apply {
-            setObject(true, forKey = kSecReturnData)
-            setObject(kSecMatchLimitOne, forKey = kSecMatchLimit)
+        val query = baseQuery()?.also { dict ->
+            CFDictionarySetValue(dict, kSecReturnData, kCFBooleanTrue)
+            CFDictionarySetValue(dict, kSecMatchLimit, kSecMatchLimitOne)
         }
         memScoped {
-            val result = alloc<kotlinx.cinterop.ObjCObjectVar<kotlin.Any?>>()
+            val result = alloc<CFTypeRefVar>()
             val status = SecItemCopyMatching(query, result.ptr)
             if (status != errSecSuccess) return null
-            val data = result.value as? NSData ?: return null
+            val data = CFBridgingRelease(result.value) as? NSData ?: return null
             return NSString.create(data, NSUTF8StringEncoding) as? String
         }
     }
@@ -58,9 +65,12 @@ class IosCredentialStore : CredentialStore {
         SecItemDelete(baseQuery())
     }
 
-    private fun baseQuery(): NSMutableDictionary = NSMutableDictionary().apply {
-        setObject(kSecClassGenericPassword!!, forKey = kSecClass as NSString)
-        setObject(SERVICE, forKey = kSecAttrService as NSString)
-        setObject(ACCOUNT, forKey = kSecAttrAccount as NSString)
-    }
+    private fun baseQuery(): CFMutableDictionaryRef? =
+        CFDictionaryCreateMutable(null, 0, null, null)?.also { dict ->
+            CFDictionarySetValue(dict, kSecClass, kSecClassGenericPassword)
+            CFDictionarySetValue(dict, kSecAttrService, cfStr(SERVICE))
+            CFDictionarySetValue(dict, kSecAttrAccount, cfStr(ACCOUNT))
+        }
+
+    private fun cfStr(s: String) = CFStringCreateWithCString(null, s, kCFStringEncodingUTF8)
 }
