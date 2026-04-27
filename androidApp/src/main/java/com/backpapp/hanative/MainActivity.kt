@@ -7,8 +7,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import com.backpapp.hanative.navigation.HaNativeNavHost
+import com.backpapp.hanative.platform.HapticEngine
+import com.backpapp.hanative.platform.LocalHapticEngine
 import com.backpapp.hanative.ui.LocalWindowSizeClass
 import com.backpapp.hanative.ui.WindowSizeClass
+import org.koin.core.context.GlobalContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,7 +25,11 @@ class MainActivity : ComponentActivity() {
                     else -> WindowSizeClass.EXPANDED
                 }
             }
-            CompositionLocalProvider(LocalWindowSizeClass provides windowSizeClass) {
+            val hapticEngine = remember { GlobalContext.get().get<HapticEngine>() }
+            CompositionLocalProvider(
+                LocalWindowSizeClass provides windowSizeClass,
+                LocalHapticEngine provides hapticEngine,
+            ) {
                 HaNativeNavHost()
             }
         }
