@@ -82,6 +82,8 @@ kotlin {
             implementation(libs.sqldelight.android.driver)
             // Koin Android
             implementation(libs.koin.android)
+            // EncryptedSharedPreferences (Android Keystore-backed)
+            implementation(libs.security.crypto)
         }
 
         iosMain.dependencies {
@@ -93,6 +95,7 @@ kotlin {
 
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }
