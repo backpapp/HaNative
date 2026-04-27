@@ -1,10 +1,12 @@
 package com.backpapp.hanative.platform
 
+import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
-import kotlinx.cinterop.usePinned
+import kotlinx.cinterop.readBytes
+import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFDataCreate
 import platform.CoreFoundation.CFDataGetBytePtr
@@ -38,9 +40,7 @@ class IosCredentialStore : CredentialStore {
 
     override suspend fun saveToken(token: String) {
         val ubytes = token.encodeToByteArray().asUByteArray()
-        val cfData = ubytes.usePinned { pinned ->
-            CFDataCreate(null, pinned.addressOf(0), ubytes.size.toLong())
-        } ?: return
+        val cfData = CFDataCreate(null, ubytes.refTo(0), ubytes.size.toLong()) ?: return
         SecItemDelete(baseQuery())
         val addQuery = baseQuery()?.also { dict ->
             CFDictionarySetValue(dict, kSecValueData, cfData)
@@ -61,7 +61,7 @@ class IosCredentialStore : CredentialStore {
             val cfData = result.value as? CFDataRef ?: return null
             val length = CFDataGetLength(cfData).toInt()
             val ptr = CFDataGetBytePtr(cfData) ?: return null
-            return ByteArray(length) { ptr[it].toByte() }.decodeToString()
+            return ptr.reinterpret<ByteVar>().readBytes(length).decodeToString()
         }
     }
 
