@@ -1,8 +1,15 @@
 package com.backpapp.hanative.platform
 
-// Story 3.2 provides full implementation using ProcessLifecycleOwner ON_START.
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
+
 actual class AppLifecycleObserver actual constructor() {
     actual fun onForeground(callback: () -> Unit) {
-        // TODO Story 3.2: wire ProcessLifecycleOwner.get().lifecycle.addObserver(...)
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                callback()
+            }
+        })
     }
 }

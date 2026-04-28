@@ -84,6 +84,8 @@ kotlin {
             implementation(libs.koin.android)
             // EncryptedSharedPreferences (Android Keystore-backed)
             implementation(libs.security.crypto)
+            // ProcessLifecycleOwner for AppLifecycleObserver
+            implementation(libs.lifecycle.process)
         }
 
         iosMain.dependencies {

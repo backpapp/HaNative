@@ -51,6 +51,7 @@ navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui",
 # Lifecycle ViewModel (KMP)
 lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel", version.ref = "lifecycle-viewmodel" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle-viewmodel" }
+lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle-viewmodel" }
 
 # Android platform
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }

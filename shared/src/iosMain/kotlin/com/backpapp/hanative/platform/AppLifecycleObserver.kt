@@ -1,9 +1,16 @@
 package com.backpapp.hanative.platform
 
-// Story 3.2 provides full implementation using NSNotificationCenter didBecomeActiveNotification.
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSOperationQueue
+import platform.UIKit.UIApplicationDidBecomeActiveNotification
+
 actual class AppLifecycleObserver actual constructor() {
     actual fun onForeground(callback: () -> Unit) {
-        // TODO Story 3.2: wire NSNotificationCenter.defaultCenter().addObserverForName(
-        //   UIApplicationDidBecomeActiveNotification, ...)
+        NSNotificationCenter.defaultCenter().addObserverForName(
+            name = UIApplicationDidBecomeActiveNotification,
+            `object` = null,
+            queue = NSOperationQueue.mainQueue(),
+            usingBlock = { _ -> callback() },
+        )
     }
 }
