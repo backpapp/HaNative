@@ -116,6 +116,7 @@ class KtorHaWebSocketClient(
             }
             "event" -> handleEvent(obj)
             "result" -> handleResult(obj)
+            else -> println("DEBUG: KtorHaWebSocketClient unknown message type: ${obj["type"]?.jsonPrimitive?.content}")
         }
     }
 
