@@ -1,7 +1,9 @@
 package com.backpapp.hanative.data.remote
 
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class HaReconnectManagerTest {
     private val manager = HaReconnectManager()
@@ -28,5 +30,14 @@ class HaReconnectManagerTest {
         manager.advanceBackoff()
         manager.reset()
         assertEquals(1_000L, manager.nextDelayMs())
+    }
+
+    @Test
+    fun `waitThenAttempt advances backoff and invokes attempt`() = runTest {
+        assertEquals(1_000L, manager.nextDelayMs())
+        var called = false
+        manager.waitThenAttempt { called = true }
+        assertTrue(called)
+        assertEquals(2_000L, manager.nextDelayMs())
     }
 }

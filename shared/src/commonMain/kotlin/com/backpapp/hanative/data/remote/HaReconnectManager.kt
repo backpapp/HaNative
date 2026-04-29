@@ -3,7 +3,7 @@ package com.backpapp.hanative.data.remote
 import kotlinx.coroutines.delay
 
 class HaReconnectManager {
-    private var backoffMs = 1_000L
+    @Volatile private var backoffMs = 1_000L
 
     fun nextDelayMs(): Long = backoffMs
 

@@ -37,3 +37,11 @@
 - **`stopDiscovery()` no-op on both platforms** — documented design choice; `awaitClose` in `callbackFlow` handles teardown on scope cancellation. Interface method exists for contract completeness. Revisit if callers need mid-stream stop without cancelling the collector.
 - **Callbacks fire into `discovered` after flow cancellation** — pre-existing `callbackFlow` limitation; in-flight NSD/NSNetService resolves complete after `awaitClose`. `trySend` is safe post-close; mutations are harmless at MVP scale. Revisit in Story 3.3.
 - **Tests cover only FakeServerDiscovery, zero real platform impl coverage** — documented in story; `AppLifecycleObserver` and real `ServerDiscovery` impls require instrumented tests or manual verification. Functional verification deferred to Story 3.3.
+
+## Deferred from: code review of 3-3-ha-websocket-connection-session-persistence (2026-04-30)
+
+- **`HttpClient` never closed** — `httpClientModule()` provides `HttpClient` as Koin `single` with no `onClose` teardown hook. Ktor `HttpClient` holds native resources (CIO thread pool / Darwin NSURLSession) that leak if the module is ever replaced or Koin reloads.
+- **`MainScope()` as `single<CoroutineScope>` never cancelled** — `serverManagerModule()` binds `MainScope()` as a DI singleton with no Koin `onClose { scope.cancel() }`. App-level lifecycle concern; revisit when shutdown/test teardown hooks are needed.
+- **`onForeground` callback not deregistered after `disconnect()`** — `lifecycleObserver.onForeground { triggerReconnect() }` registered in `initialize()` persists after `disconnect()`; next foreground event re-enters `Reconnecting` state. Requires `AppLifecycleObserver` deregistration API.
+- **Race between `reconnectJob?.cancel()` and in-flight `waitThenAttempt`** — coroutine cancellation is cooperative; `attemptConnect()` may complete and call `scheduleReconnect()` after the `isConnected` collector already set state to `Connected`. Mitigated by P2+P3 patches; residual risk acceptable for MVP.
+- **`initialize()` allows multiple registrations** — no guard against re-entry; each call appends another `onForeground` callback and launches a duplicate `isConnected` collector. No current multi-call site; add guard when call sites are established.

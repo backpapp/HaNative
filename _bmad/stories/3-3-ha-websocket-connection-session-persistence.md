@@ -1,6 +1,6 @@
 # Story 3.3: HA WebSocket Connection & Session Persistence
 
-Status: review
+Status: done
 
 ## Story
 
@@ -302,6 +302,30 @@ Modified files:
 - Story 3.2 `AppLifecycleObserver` testing note: AppLifecycleObserver OS-side effects — no commonTest coverage possible
 - Architecture LAN-first NFR: `_bmad/outputs/architecture.md` (FR1–8 HA connectivity section)
 - Ktor KMP AtomicInt gotcha: use `Mutex + var counter` not `java.util.concurrent.atomic.AtomicInteger` (prev session obs #296)
+
+## Senior Developer Review (AI)
+
+### Review Findings
+
+- [x] [Review][Decision] Infinite reconnect loop has no terminal state — resolved: added `ConnectionState.Failed` + `MAX_RECONNECT_ATTEMPTS = 10`; loop exits with `Failed` state after 10 attempts.
+
+- [x] [Review][Patch] Auth token failure leaves `_connectionState` stuck at `Reconnecting` with no retry [ServerManager.kt:59] — fixed: token failure now sets `_connectionState = Disconnected` and returns; while-loop exits (checks `== Reconnecting`).
+
+- [x] [Review][Patch] `attemptConnect()` calls `scheduleReconnect()` creating recursive job restart inside the loop [ServerManager.kt:76] — fixed: removed `scheduleReconnect()` from `attemptConnect()`; `connect()` now calls `scheduleReconnect()` if state remains `Reconnecting` after initial attempt.
+
+- [x] [Review][Patch] `triggerReconnect()` launches parallel `attemptConnect()` without cancelling existing reconnect loop [ServerManager.kt:50-53] — fixed: `triggerReconnect()` now calls `scheduleReconnect()` which cancels existing `reconnectJob` before starting new loop.
+
+- [x] [Review][Patch] `HaReconnectManager.backoffMs` is unsynchronized mutable state accessed from two coroutines [HaReconnectManager.kt:3] — fixed: added `@Volatile` to `backoffMs`.
+
+- [x] [Review][Patch] No timeout on `webSocketClient.connect()` — LAN TCP stall hangs reconnect loop indefinitely [ServerManager.kt:~61] — fixed: wrapped both LAN and cloud `connect()` calls with `withTimeout(10_000L)`.
+
+- [x] [Review][Patch] `waitThenAttempt` has zero test coverage [HaReconnectManagerTest.kt] — fixed: added `waitThenAttempt advances backoff and invokes attempt` test using `runTest`; 4/4 tests GREEN.
+
+- [x] [Review][Defer] `HttpClient` never closed — no `onClose` teardown in Koin module [DataModule.kt / HttpClientModule.kt] — deferred, pre-existing architectural gap
+- [x] [Review][Defer] `MainScope()` registered as `single<CoroutineScope>` is never cancelled [DataModule.kt:20] — deferred, app-level lifecycle concern
+- [x] [Review][Defer] `onForeground` callback not deregistered after `disconnect()` [ServerManager.kt] — deferred, requires AppLifecycleObserver deregistration API
+- [x] [Review][Defer] Race between `reconnectJob?.cancel()` and in-flight `waitThenAttempt` [ServerManager.kt] — deferred, mitigated by P2+P3 fixes; residual cooperative-cancellation is acceptable
+- [x] [Review][Defer] `initialize()` allows multiple registrations of callbacks + collector [ServerManager.kt] — deferred, no current multi-call site; guard when call sites are known
 
 ## Dev Agent Record
 

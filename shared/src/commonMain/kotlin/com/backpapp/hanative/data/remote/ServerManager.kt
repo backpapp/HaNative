@@ -8,6 +8,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+
+private const val MAX_RECONNECT_ATTEMPTS = 10
+private const val CONNECT_TIMEOUT_MS = 10_000L
 
 class ServerManager(
     private val webSocketClient: HaWebSocketClient,
@@ -22,6 +26,7 @@ class ServerManager(
     private var lanUrl: String? = null
     private var cloudUrl: String? = null
     private var reconnectJob: Job? = null
+    @Volatile private var attemptCount = 0
 
     fun initialize(lanUrl: String, cloudUrl: String? = null) {
         require(cloudUrl == null || cloudUrl.startsWith("https://")) {
@@ -35,6 +40,7 @@ class ServerManager(
                 if (connected) {
                     reconnectJob?.cancel()
                     reconnectManager.reset()
+                    attemptCount = 0
                     _connectionState.value = ConnectionState.Connected
                 } else if (_connectionState.value == ConnectionState.Connected) {
                     scheduleReconnect()
@@ -44,21 +50,31 @@ class ServerManager(
     }
 
     fun connect() {
-        scope.launch { attemptConnect() }
+        scope.launch {
+            attemptConnect()
+            if (_connectionState.value == ConnectionState.Reconnecting) {
+                scheduleReconnect()
+            }
+        }
     }
 
     private fun triggerReconnect() {
         if (_connectionState.value != ConnectionState.Connected) {
-            scope.launch { attemptConnect() }
+            scheduleReconnect()
         }
     }
 
     private suspend fun attemptConnect() {
         val lan = lanUrl ?: return
         _connectionState.value = ConnectionState.Reconnecting
-        val token = runCatching { authRepository.getValidToken() }.getOrNull() ?: return
+        val token = runCatching { authRepository.getValidToken() }.getOrNull() ?: run {
+            _connectionState.value = ConnectionState.Disconnected
+            return
+        }
 
-        val lanOk = runCatching { webSocketClient.connect(lan, token) }.isSuccess
+        val lanOk = runCatching {
+            withTimeout(CONNECT_TIMEOUT_MS) { webSocketClient.connect(lan, token) }
+        }.isSuccess
         if (lanOk) {
             reconnectManager.reset()
             return
@@ -66,21 +82,28 @@ class ServerManager(
 
         val cloud = cloudUrl
         if (cloud != null) {
-            val cloudOk = runCatching { webSocketClient.connect(cloud, token) }.isSuccess
+            val cloudOk = runCatching {
+                withTimeout(CONNECT_TIMEOUT_MS) { webSocketClient.connect(cloud, token) }
+            }.isSuccess
             if (cloudOk) {
                 reconnectManager.reset()
                 return
             }
         }
-
-        scheduleReconnect()
+        // Both failed — caller handles retry via scheduleReconnect
     }
 
     private fun scheduleReconnect() {
         _connectionState.value = ConnectionState.Reconnecting
+        attemptCount = 0
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
-            while (_connectionState.value != ConnectionState.Connected) {
+            while (_connectionState.value == ConnectionState.Reconnecting) {
+                if (attemptCount >= MAX_RECONNECT_ATTEMPTS) {
+                    _connectionState.value = ConnectionState.Failed
+                    return@launch
+                }
+                attemptCount++
                 reconnectManager.waitThenAttempt { attemptConnect() }
             }
         }
@@ -96,5 +119,6 @@ class ServerManager(
         object Connected : ConnectionState()
         object Reconnecting : ConnectionState()
         object Disconnected : ConnectionState()
+        object Failed : ConnectionState()
     }
 }
