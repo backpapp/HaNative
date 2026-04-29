@@ -47,6 +47,21 @@ So that onboarding can offer auto-discovered HA instances and the app reconnects
 - [x] Task 8: Build `:shared:testDebugUnitTest :androidApp:assembleDebug` — BUILD SUCCESSFUL (AC: all)
   - [x] 8.1: BUILD SUCCESSFUL in 9s — 56 tests, 0 failures; first attempt had 2 test failures (UncompletedCoroutinesError — fixed MutableSharedFlow(replay=1) + emit-before-collect pattern)
 
+### Review Findings
+
+- [x] [Review][Defer] Android AppLifecycleObserver — no observer removal mechanism — accepted MVP: Koin single = one instance = one addObserver call per process lifetime. Observer accumulation only possible via test misuse. Revisit in Story 3.3 if instrumented tests are added.
+- [x] [Review][Patch] Android shared resolveListener + silent concurrent-resolve drops [AndroidServerDiscovery.kt:33]
+- [x] [Review][Patch] Android `discovered` list mutated from NSD binder threads without synchronization [AndroidServerDiscovery.kt:14,20-22,35-36]
+- [x] [Review][Patch] iOS IosNetServiceDelegate per-service instances not retained → ARC dealloc before resolution fires [IosServerDiscovery.kt:23-33]
+- [x] [Review][Patch] iOS `discovered`/`services` lists unsynchronized across NSNetService callback threads [IosServerDiscovery.kt:16,26-29,35-36]
+- [x] [Review][Patch] iOS NSNotificationCenter observer token discarded → leak + callback multiplies on repeated onForeground [AppLifecycleObserver.kt (iOS):8-14]
+- [x] [Review][Patch] Android silent `catch (_: Exception) {}` in onServiceFound hides all resolve errors [AndroidServerDiscovery.kt:33]
+- [ ] [Review][Patch] iOS `resolved.hostName` returns DNS name not IP address [IosServerDiscovery.kt:26] — skipped batch apply, sockaddr parsing requires judgment
+- [x] [Review][Patch] iOS unused `@OptIn(ExperimentalObjCName::class)` annotation [IosServerDiscovery.kt:13]
+- [x] [Review][Defer] `stopDiscovery()` no-op on both platforms [AndroidServerDiscovery.kt:48, IosServerDiscovery.kt:44] — deferred, documented design choice (awaitClose handles teardown)
+- [x] [Review][Defer] Callbacks fire into `discovered` after flow cancellation — deferred, pre-existing callbackFlow limitation; trySend safe post-close
+- [x] [Review][Defer] Tests cover only FakeServerDiscovery, zero real impl coverage — deferred, documented in story; functional verification deferred to Story 3.3
+
 ## Dev Notes
 
 ### Pre-existing Stubs — Do Not Recreate

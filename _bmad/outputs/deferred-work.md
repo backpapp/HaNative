@@ -31,3 +31,9 @@
 - **Action `uses:` not pinned to commit SHAs** — all three workflow files use floating version tags (`@v4`); supply-chain best practice for workflows with `issues: write` + `GITHUB_TOKEN` is SHA pinning. Harden when security posture requires it.
 - **No `timeout-minutes` on any job** — a hung Gradle daemon, stalled `xcodebuild`, or `curl` that never completes will consume runner minutes until GitHub's 6-hour default timeout. Add per-job timeouts (30 min Android, 45 min iOS) when CI costs become a concern.
 - **`macos-latest` non-pinned runner** — Xcode version may change silently on GitHub runner image updates, potentially breaking the iOS build without a code change. Pin to a specific `macos-15` or similar when build reproducibility is required.
+
+## Deferred from: code review of 3-2-server-discovery-app-lifecycle-observer (2026-04-28)
+
+- **`stopDiscovery()` no-op on both platforms** — documented design choice; `awaitClose` in `callbackFlow` handles teardown on scope cancellation. Interface method exists for contract completeness. Revisit if callers need mid-stream stop without cancelling the collector.
+- **Callbacks fire into `discovered` after flow cancellation** — pre-existing `callbackFlow` limitation; in-flight NSD/NSNetService resolves complete after `awaitClose`. `trySend` is safe post-close; mutations are harmless at MVP scale. Revisit in Story 3.3.
+- **Tests cover only FakeServerDiscovery, zero real platform impl coverage** — documented in story; `AppLifecycleObserver` and real `ServerDiscovery` impls require instrumented tests or manual verification. Functional verification deferred to Story 3.3.

@@ -3,6 +3,7 @@ package com.backpapp.hanative.platform
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.util.Log
 import com.backpapp.hanative.domain.model.HaServerInfo
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -15,12 +16,16 @@ class AndroidServerDiscovery(private val context: Context) : ServerDiscovery {
         val discovered = mutableListOf<HaServerInfo>()
 
         val resolveListener = object : NsdManager.ResolveListener {
-            override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {}
+            override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
+                Log.d("NSD", "Resolve failed: ${info.serviceName} errorCode=$errorCode")
+            }
             override fun onServiceResolved(info: NsdServiceInfo) {
                 val host = info.host?.hostAddress ?: return
-                discovered.removeAll { it.name == info.serviceName }
-                discovered.add(HaServerInfo(info.serviceName, host, info.port))
-                trySend(discovered.toList())
+                synchronized(discovered) {
+                    discovered.removeAll { it.name == info.serviceName }
+                    discovered.add(HaServerInfo(info.serviceName, host, info.port))
+                    trySend(discovered.toList())
+                }
             }
         }
 
@@ -30,11 +35,15 @@ class AndroidServerDiscovery(private val context: Context) : ServerDiscovery {
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) { close() }
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
             override fun onServiceFound(info: NsdServiceInfo) {
-                try { nsdManager.resolveService(info, resolveListener) } catch (_: Exception) {}
+                try { nsdManager.resolveService(info, resolveListener) } catch (e: Exception) {
+                    Log.d("NSD", "resolveService failed for ${info.serviceName}: $e")
+                }
             }
             override fun onServiceLost(info: NsdServiceInfo) {
-                discovered.removeAll { it.name == info.serviceName }
-                trySend(discovered.toList())
+                synchronized(discovered) {
+                    discovered.removeAll { it.name == info.serviceName }
+                    trySend(discovered.toList())
+                }
             }
         }
 
