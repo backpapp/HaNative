@@ -11,7 +11,8 @@ import com.backpapp.hanative.domain.repository.EntityRepository
 import com.backpapp.hanative.domain.repository.HaWebSocketClient
 import com.backpapp.hanative.platform.OAuthCallbackBus
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -30,7 +31,7 @@ val dataModule = module {
 }
 
 fun serverManagerModule(): Module = module {
-    single<CoroutineScope> { MainScope() }
+    single<CoroutineScope> { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
     single { HaUrlRepository(get(), get()) }
     single { KtorHaWebSocketClient(get()) }
     single<HaWebSocketClient> { get<KtorHaWebSocketClient>() }
@@ -42,6 +43,7 @@ fun serverManagerModule(): Module = module {
             authRepository = get(),
             lifecycleObserver = get(),
             reconnectManager = get(),
+            entityRepository = get(),
             scope = get(),
         )
     }

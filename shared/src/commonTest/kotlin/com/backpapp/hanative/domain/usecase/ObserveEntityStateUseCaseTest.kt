@@ -27,6 +27,7 @@ class ObserveEntityStateUseCaseTest {
             override suspend fun callService(
                 domain: String, service: String, entityId: String?, serviceData: Map<String, Any?>
             ): Result<Unit> = Result.success(Unit)
+            override suspend fun refresh(): Result<Unit> = Result.success(Unit)
         }
 
     @Test

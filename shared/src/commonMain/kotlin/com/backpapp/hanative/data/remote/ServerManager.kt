@@ -1,6 +1,7 @@
 package com.backpapp.hanative.data.remote
 
 import kotlin.concurrent.Volatile
+import com.backpapp.hanative.domain.repository.EntityRepository
 import com.backpapp.hanative.domain.repository.HaWebSocketClient
 import com.backpapp.hanative.platform.AppLifecycleObserver
 import kotlinx.coroutines.CoroutineScope
@@ -19,6 +20,7 @@ class ServerManager(
     private val authRepository: AuthenticationRepositoryImpl,
     private val lifecycleObserver: AppLifecycleObserver,
     private val reconnectManager: HaReconnectManager,
+    private val entityRepository: EntityRepository,
     private val scope: CoroutineScope,
 ) {
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
@@ -43,6 +45,7 @@ class ServerManager(
                     reconnectManager.reset()
                     attemptCount = 0
                     _connectionState.value = ConnectionState.Connected
+                    scope.launch { entityRepository.refresh() }
                 } else if (_connectionState.value == ConnectionState.Connected) {
                     scheduleReconnect()
                 }

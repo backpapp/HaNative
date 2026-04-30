@@ -8,8 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
-import kotlin.test.assertTrue
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class CallServiceUseCaseTest {
 
@@ -20,6 +21,7 @@ class CallServiceUseCaseTest {
             override suspend fun callService(
                 domain: String, service: String, entityId: String?, serviceData: Map<String, Any?>
             ): Result<Unit> = if (succeeds) Result.success(Unit) else Result.failure(RuntimeException("err"))
+            override suspend fun refresh(): Result<Unit> = Result.success(Unit)
         }
 
     @Test
@@ -53,15 +55,16 @@ class CallServiceUseCaseTest {
                 capturedData = serviceData
                 return Result.success(Unit)
             }
+            override suspend fun refresh(): Result<Unit> = Result.success(Unit)
         }
 
         val useCase = CallServiceUseCase(repo)
         val data = mapOf("brightness" to 255)
         useCase("light", "turn_on", "light.living_room", data)
 
-        assert(capturedDomain == "light")
-        assert(capturedService == "turn_on")
-        assert(capturedEntityId == "light.living_room")
-        assert(capturedData == data)
+        assertEquals("light", capturedDomain)
+        assertEquals("turn_on", capturedService)
+        assertEquals("light.living_room", capturedEntityId)
+        assertEquals(data, capturedData)
     }
 }

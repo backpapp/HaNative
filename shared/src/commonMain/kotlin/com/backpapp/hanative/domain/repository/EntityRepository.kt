@@ -15,4 +15,6 @@ interface EntityRepository {
         entityId: String? = null,
         serviceData: Map<String, Any?> = emptyMap(),
     ): Result<Unit>
+
+    suspend fun refresh(): Result<Unit>
 }

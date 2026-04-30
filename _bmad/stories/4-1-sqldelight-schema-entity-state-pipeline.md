@@ -1,6 +1,6 @@
 # Story 4.1: SQLDelight Schema & Entity State Pipeline
 
-Status: review
+Status: done
 
 ## Story
 
@@ -456,3 +456,47 @@ Build verification delegated to user — pre-existing Gradle Kotlin DSL cache is
 - `shared/src/commonTest/kotlin/com/backpapp/hanative/data/local/InstantColumnAdapterTest.kt`
 - `shared/src/commonTest/kotlin/com/backpapp/hanative/domain/usecase/ObserveEntityStateUseCaseTest.kt`
 - `shared/src/commonTest/kotlin/com/backpapp/hanative/domain/usecase/CallServiceUseCaseTest.kt`
+
+## Senior Developer Review (AI)
+
+### Review Findings
+
+<!-- Format: [Review][Decision|Patch|Defer] Title — unchecked = outstanding, checked = resolved -->
+
+#### Decision-Needed
+
+- [x] [Review][Decision] `lastChanged` and `lastUpdated` both mapped to `last_updated` — Schema stores only `last_updated`; `toDomain()` assigns it to both `HaEntity.lastChanged` and `HaEntity.lastUpdated`, silently discarding the distinct `lastChanged` value that HA state events carry separately. **Option A:** Add `last_changed INTEGER AS kotlinx.datetime.Instant NOT NULL` column to `EntityState.sq`, store `event.lastChanged` in upserts, map correctly in `toDomain()`. **Option B:** Accept as documented tech-debt with a comment in `toDomain()` — acceptable if no UI shows `lastChanged` in Epic 4.
+
+#### Patches
+
+- [x] [Review][Patch] Blocking DB read in constructor (`EntityRepositoryImpl.kt:33–35`) — `_entities` initialized by `selectAllEntityStates().executeAsList()` synchronously in the constructor body. Koin resolves `single {}` blocks on whatever thread first resolves the dep — typically main. ANR risk on Android; main-thread SQLite violation on iOS. No try/catch means a DB error here crashes DI graph init. Fix: initialize `_entities = MutableStateFlow(emptyList())` and load cache in `init { scope.launch { _entities.value = runCatching { ...executeAsList().map { it.toDomain() } }.getOrDefault(emptyList()) } }`.
+
+- [x] [Review][Patch] DB writes on `Dispatchers.Main` (`EntityRepositoryImpl.kt:48–55`) — `scope` is `MainScope()` (Dispatchers.Main). `upsertAndEmit` is not suspend and runs a SQLite write + full table scan synchronously on the main dispatcher. Under HA startup flood (hundreds of entities), causes UI jank and violates SQLite thread safety on iOS `NativeSqliteDriver`. Fix: make `upsertAndEmit` a `suspend fun` and wrap DB operations in `withContext(Dispatchers.Default)`.
+
+- [x] [Review][Patch] `refreshFromWebSocket()` never called — AC6 PARTIAL, AC7 FAIL (`EntityRepositoryImpl.kt:63`) — The function exists but has no call site. `ServerManager` has no reference to `EntityRepository`. Neither initial connect nor reconnect triggers `getStates()`. The cold-launch refresh and reconnect-refresh sequences are completely absent. Fix: inject `EntityRepositoryImpl` into `ServerManager` (or introduce a `RefreshEntitiesUseCase`); call `refreshFromWebSocket()` after successful connect and after `ConnectionLost` → reconnect.
+
+- [x] [Review][Patch] `collectEvents` no restart on exception/termination (`EntityRepositoryImpl.kt:39–40`) — `scope.launch { collectEvents() }` discards the returned `Job`. If `encodeAttributes`/`decodeAttributes` throws, or the `events()` flow completes, the coroutine exits silently — event pipeline dead for the app lifetime with no observable error signal. Fix: add `.catch { }` on the flow and an outer restart loop. Also: `HaEvent.ConnectionLost` is a no-op; it should trigger re-subscription or signal the ViewModel.
+
+- [x] [Review][Patch] Concurrent DB write race — no `Mutex` (`EntityRepositoryImpl.kt`) — `upsertAndEmit` and `refreshFromWebSocket` can run concurrently (e.g. live events arriving during a reconnect `getStates()` bulk load). Both write to `entityStateQueries` and reassign `_entities.value` without synchronization. Last-write-wins produces stale snapshots; concurrent SQLite writes risk `SQLITE_BUSY`. Fix: add `private val dbMutex = Mutex()` and wrap both paths with `dbMutex.withLock { }`.
+
+- [x] [Review][Patch] `refreshFromWebSocket` silent failure (`EntityRepositoryImpl.kt:50`) — `getStates().onSuccess { }` has no `.onFailure` branch. Network failure silently leaves cache stale with no observable signal. Fix: add `.onFailure { e -> /* log or re-throw */ }`, and consider changing return type to `Result<Unit>` so callers can react.
+
+- [x] [Review][Patch] `decodeAttributes` no exception handling (`EntityRepositoryImpl.kt:29`) — `json.decodeFromString(MapAnySerializer, raw)` throws `SerializationException` on malformed JSON, propagates through `toDomain()` into the coroutine, and kills the event loop. Fix: wrap with `runCatching { json.decodeFromString(MapAnySerializer, raw) }.getOrElse { emptyMap() }`.
+
+- [x] [Review][Patch] No `SupervisorJob` in shared `CoroutineScope` (`DataModule.kt`) — `MainScope()` uses a regular `Job`. `ServerManager`, `SessionRepository`, and `EntityRepositoryImpl` all share this scope via Koin. One unhandled exception in any child coroutine cancels the entire scope and silently kills event collection in all three. Fix: register `single<CoroutineScope> { CoroutineScope(SupervisorJob() + Dispatchers.Main) }`.
+
+- [x] [Review][Patch] Koin double-binding fragile pattern (`DataModule.kt:47–48`) — `single { EntityRepositoryImpl(get(), get(), get()) }` + `single<EntityRepository> { get<EntityRepositoryImpl>() }` is fragile and can create two instances under certain resolution orders. Fix: `single { EntityRepositoryImpl(get(), get(), get()) } bind EntityRepository::class`.
+
+- [x] [Review][Patch] File `EntityDomainAdapter.kt` contains `InstantColumnAdapter` — Name mismatch causes discovery failures. Fix: rename file to `InstantColumnAdapter.kt`.
+
+- [x] [Review][Patch] `observeEntity` missing `distinctUntilChanged()` (`EntityRepositoryImpl.kt:57`) — Every unrelated `StateChanged` event triggers re-emission of the same `HaEntity?` value to all subscribers. Fix: append `.distinctUntilChanged()` after `.map { }`.
+
+- [x] [Review][Patch] Test assertions use `assert()` not `assertEquals()` (`CallServiceUseCaseTest.kt:57–60`) — Bare `assert(x == y)` reports only "Assertion failed" on failure with no actual/expected diff. Fix: replace with `assertEquals(expected, actual)`.
+
+#### Deferred
+
+- [x] [Review][Defer] Full table scan on every `StateChanged` event — `upsertAndEmit` calls `selectAllEntityStates().executeAsList()` after every single event. O(n) I/O per event. Optimization; no impact at current scale. Defer: add `Map<String, HaEntity>` index in a performance story.
+- [x] [Review][Defer] `Json` instance not shared — Repo creates `Json { ignoreUnknownKeys = true }` separately from WebSocket client's `{ isLenient = true }` instance. Minor inconsistency risk. Defer to DI consolidation pass.
+- [x] [Review][Defer] `INSERT OR REPLACE` vs true SQLite upsert — Deletes+re-inserts rows on conflict; breaks FK cascades. No FK children yet. Defer until schema gains child tables.
+- [x] [Review][Defer] `StateFlow<List<HaEntity>>` in domain interface — Leaks coroutines library into domain. No practical impact at current scope. Defer to architecture review.
+- [x] [Review][Defer] `domain` column derivable from `entity_id` — Redundant storage, inconsistency risk. Defer schema cleanup to future story.
