@@ -45,3 +45,15 @@
 - **`onForeground` callback not deregistered after `disconnect()`** — `lifecycleObserver.onForeground { triggerReconnect() }` registered in `initialize()` persists after `disconnect()`; next foreground event re-enters `Reconnecting` state. Requires `AppLifecycleObserver` deregistration API.
 - **Race between `reconnectJob?.cancel()` and in-flight `waitThenAttempt`** — coroutine cancellation is cooperative; `attemptConnect()` may complete and call `scheduleReconnect()` after the `isConnected` collector already set state to `Connected`. Mitigated by P2+P3 patches; residual risk acceptable for MVP.
 - **`initialize()` allows multiple registrations** — no guard against re-entry; each call appends another `onForeground` callback and launches a duplicate `isConnected` collector. No current multi-call site; add guard when call sites are established.
+
+## Deferred from: code review of 3-4-onboarding-ha-url-entry-connection-test (2026-04-30)
+
+- **`AuthRoute` is placeholder `Box` in `HaNativeNavHost.kt`** — Story 3.5 fills it; required to ship Story 3.4.
+- **`AuthRoute` restoration after process death yields blank screen with no nav out** — depends on Story 3.5/3.6 content + back-suppression policy.
+- **`stopDiscovery()` double-call risk** — Android `NsdManager.stopServiceDiscovery` after stop throws `IllegalArgumentException`; idempotency not verified for current platform impls. Verify in integration test.
+- **`koinViewModel()` scope vs nav3 entry lifecycle** — VM may rebuild on Onboarding → Auth → back navigation; architectural concern when Auth + Dashboard wired.
+- **Process death mid-Loading silently resets `uiState` to `Idle`** — `urlInput` restored via `rememberSaveable`, but no in-flight indicator returns; low-pri UX polish.
+- **Discovered-server tap silently overwrites typed input; LazyColumn reorder shifts tap targets under the user's finger** — UX polish.
+- **`urlInput` has no length cap** — `rememberSaveable` could push pathological paste into Bundle > 1MB on save; defensive edge.
+- **`testUrl` appends `/api/` to user-provided path** — `http://host/lovelace` becomes `/lovelace/api/`; user-error tolerance, low-pri.
+- **Generic error message collapses 401/auth/TLS/timeout/malformed signals into one bucket** — AC4 pins exact single string for MVP; revisit when error UX is iterated.

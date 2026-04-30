@@ -63,12 +63,16 @@ kotlin {
 
             // Koin (common)
             implementation(libs.koin.core)
+            implementation(libs.koin.compose)
+            implementation(libs.koin.compose.viewmodel)
 
             // DataStore (KMP, no platform split needed)
             implementation(libs.datastore.preferences.core)
 
-            // Lifecycle ViewModel (KMP)
+            // Lifecycle ViewModel (Compose Multiplatform — JetBrains-namespaced)
             implementation(libs.lifecycle.viewmodel)
+            implementation(libs.lifecycle.viewmodel.compose)
+            implementation(libs.lifecycle.runtime.compose)
 
             // Navigation 3 (KMP — JetBrains multiplatform artifact, works on Android + iOS + Desktop + Web)
             implementation(libs.navigation3.ui)

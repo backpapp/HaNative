@@ -1,5 +1,6 @@
 package com.backpapp.hanative.data.remote
 
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.delay
 
 class HaReconnectManager {

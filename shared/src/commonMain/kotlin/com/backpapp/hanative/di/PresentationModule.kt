@@ -1,7 +1,9 @@
 package com.backpapp.hanative.di
 
+import com.backpapp.hanative.ui.onboarding.OnboardingViewModel
+import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
 val presentationModule = module {
-    // Bindings added in Story 2.x when ViewModels are implemented
+    viewModel { OnboardingViewModel(get(), get()) }
 }

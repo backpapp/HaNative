@@ -7,4 +7,7 @@ import kotlinx.serialization.Serializable
 data object OnboardingRoute : NavKey
 
 @Serializable
+data object AuthRoute : NavKey
+
+@Serializable
 data object DashboardRoute : NavKey

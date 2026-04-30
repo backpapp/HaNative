@@ -1,5 +1,6 @@
 package com.backpapp.hanative.data.remote
 
+import kotlin.concurrent.Volatile
 import com.backpapp.hanative.domain.repository.HaWebSocketClient
 import com.backpapp.hanative.platform.AppLifecycleObserver
 import kotlinx.coroutines.CoroutineScope

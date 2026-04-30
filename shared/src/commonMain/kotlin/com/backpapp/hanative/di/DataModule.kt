@@ -2,6 +2,7 @@ package com.backpapp.hanative.di
 
 import com.backpapp.hanative.data.remote.AuthenticationRepositoryImpl
 import com.backpapp.hanative.data.remote.HaReconnectManager
+import com.backpapp.hanative.data.remote.HaUrlRepository
 import com.backpapp.hanative.data.remote.KtorHaWebSocketClient
 import com.backpapp.hanative.data.remote.ServerManager
 import com.backpapp.hanative.domain.repository.HaWebSocketClient
@@ -24,6 +25,7 @@ val dataModule = module {
 
 fun serverManagerModule(): Module = module {
     single<CoroutineScope> { MainScope() }
+    single { HaUrlRepository(get(), get()) }
     single { KtorHaWebSocketClient(get()) }
     single<HaWebSocketClient> { get<KtorHaWebSocketClient>() }
     single { AuthenticationRepositoryImpl(get()) }
