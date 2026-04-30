@@ -64,3 +64,18 @@
 - **`ServerManager.initialize()` registers duplicate `onForeground` listener on repeated calls** [`ServerManager.kt`] — pre-existing Story 3.3; each `initialize()` appends a new lifecycle listener without deregistering the prior one; repeated initialize (startup + auth success) registers two listeners, triggering duplicate reconnect attempts.
 - **OAuth `refresh_token` silently discarded** [`AuthViewModel.onOAuthCallback`] — explicitly out of scope per Story 3.5 Dev Notes; HA OAuth access tokens expire (~30min); Story 3.6 to implement token refresh on 401.
 - **`SessionRepository.hasValidSession()` checks presence not expiry** [`SessionRepository.kt`] — stored but expired/revoked token passes the check; app reaches Dashboard then fails at WebSocket auth; Story 3.6 to add expiry/refresh logic.
+
+## Deferred from: code review of 4-2-dashboard-persistence-layer (2026-04-30)
+
+- `combine` exposes transient inconsistent state between dashboard and card flows (DashboardRepositoryImpl.kt:28-54) — architectural, requires single-source query.
+- `combine` re-emits on every card change globally; no `distinctUntilChanged` (DashboardRepositoryImpl.kt:28-54) — optimization.
+- `position` numeric edge cases (negative, Long.MAX truncation via `.toInt()`) (DashboardRepositoryImpl.kt:41,48) — defensive only.
+- `addCard` / `saveDashboard` lack position invariant; duplicate `position` allowed (DashboardRepositoryImpl.kt:56-67,80-92) — related to compaction decision.
+- No `UNIQUE(dashboard_id, position)` constraint (DashboardCard.sq) — would conflict with mid-reorder transient states.
+- `Dispatchers.Default` vs `Dispatchers.IO` for SQLite (DashboardRepositoryImpl.kt) — spec-conformant (Dev Note prescribes Default).
+- `config` column stored as raw `TEXT` with no JSON validation/adapter (DashboardCard.sq:5) — persistence-only scope.
+- No tests for repo, SQL, or Result.failure paths; only use-case delegation tested (DashboardUseCaseTest.kt, GetDashboardsUseCaseTest.kt) — manual verification per AC10.
+- `GetDashboardsUseCase` Flow has no `catch` operator (GetDashboardsUseCase.kt:8) — surface in ViewModel.
+- Use cases pass through with no input validation (AddCardUseCase.kt etc.) — caller responsibility.
+- Test names use backticks-with-spaces; KMP Native portability risk (DashboardUseCaseTest.kt, GetDashboardsUseCaseTest.kt) — currently runs on JVM only.
+- `dbMutex` redundant for SQLite write serialization and absent from read path (DashboardRepositoryImpl.kt:26,...) — no functional bug.

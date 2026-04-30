@@ -13,7 +13,9 @@ actual fun databaseModule() = module {
             schema = HaNativeDatabase.Schema,
             context = get(),
             name = "ha_native.db",
-        )
+        ).also { driver ->
+            driver.execute(null, "PRAGMA foreign_keys=ON", 0)
+        }
     }
     single {
         HaNativeDatabase(

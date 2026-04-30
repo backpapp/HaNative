@@ -12,7 +12,9 @@ actual fun databaseModule() = module {
         NativeSqliteDriver(
             schema = HaNativeDatabase.Schema,
             name = "ha_native.db",
-        )
+        ).also { driver ->
+            driver.execute(null, "PRAGMA foreign_keys=ON", 0)
+        }
     }
     single {
         HaNativeDatabase(

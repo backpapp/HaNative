@@ -6,7 +6,9 @@ import com.backpapp.hanative.data.remote.HaUrlRepository
 import com.backpapp.hanative.data.remote.KtorHaWebSocketClient
 import com.backpapp.hanative.data.remote.ServerManager
 import com.backpapp.hanative.data.remote.SessionRepository
+import com.backpapp.hanative.data.repository.DashboardRepositoryImpl
 import com.backpapp.hanative.data.repository.EntityRepositoryImpl
+import com.backpapp.hanative.domain.repository.DashboardRepository
 import com.backpapp.hanative.domain.repository.EntityRepository
 import com.backpapp.hanative.domain.repository.HaWebSocketClient
 import com.backpapp.hanative.platform.OAuthCallbackBus
@@ -14,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
 val dataModule = module {
@@ -49,8 +52,8 @@ fun serverManagerModule(): Module = module {
     }
     single { OAuthCallbackBus() }
     single { SessionRepository(get(), get(), get(), get()) }
-    single { EntityRepositoryImpl(get(), get(), get()) }
-    single<EntityRepository> { get<EntityRepositoryImpl>() }
+    single { EntityRepositoryImpl(get(), get(), get()) } bind EntityRepository::class
+    single { DashboardRepositoryImpl(get()) } bind DashboardRepository::class
 }
 
 expect fun hapticEngineModule(): Module

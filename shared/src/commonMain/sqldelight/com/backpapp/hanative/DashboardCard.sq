@@ -1,0 +1,31 @@
+CREATE TABLE IF NOT EXISTS dashboard_card (
+    id TEXT PRIMARY KEY NOT NULL,
+    dashboard_id TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    config TEXT NOT NULL,
+    FOREIGN KEY (dashboard_id) REFERENCES dashboard(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS dashboard_card_dashboard_id ON dashboard_card(dashboard_id);
+
+insertOrReplaceCard:
+INSERT OR REPLACE INTO dashboard_card(id, dashboard_id, entity_id, position, config) VALUES (?, ?, ?, ?, ?);
+
+selectCardById:
+SELECT * FROM dashboard_card WHERE id = ?;
+
+selectCardsByDashboard:
+SELECT * FROM dashboard_card WHERE dashboard_id = ? ORDER BY position ASC;
+
+selectAllCards:
+SELECT * FROM dashboard_card ORDER BY position ASC;
+
+deleteCard:
+DELETE FROM dashboard_card WHERE id = ?;
+
+deleteCardsByDashboard:
+DELETE FROM dashboard_card WHERE dashboard_id = ?;
+
+updateCardPositionInDashboard:
+UPDATE dashboard_card SET position = ? WHERE id = ? AND dashboard_id = ?;
