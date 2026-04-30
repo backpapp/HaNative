@@ -1,7 +1,10 @@
 package com.backpapp.hanative.di
 
+import com.backpapp.hanative.domain.usecase.CallServiceUseCase
+import com.backpapp.hanative.domain.usecase.ObserveEntityStateUseCase
 import org.koin.dsl.module
 
 val domainModule = module {
-    // Bindings added in Story 3.x when domain use cases are implemented
+    factory { ObserveEntityStateUseCase(get()) }
+    factory { CallServiceUseCase(get()) }
 }

@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS entity_state (
+    entity_id TEXT PRIMARY KEY NOT NULL,
+    domain TEXT NOT NULL,
+    state TEXT NOT NULL,
+    attributes TEXT NOT NULL,
+    last_updated INTEGER AS kotlinx.datetime.Instant NOT NULL
+);
+
+upsertEntityState:
+INSERT OR REPLACE INTO entity_state(entity_id, domain, state, attributes, last_updated)
+VALUES (?, ?, ?, ?, ?);
+
+selectAllEntityStates:
+SELECT * FROM entity_state ORDER BY last_updated DESC;
+
+selectEntityStateById:
+SELECT * FROM entity_state WHERE entity_id = ?;
+
+deleteAllEntityStates:
+DELETE FROM entity_state;

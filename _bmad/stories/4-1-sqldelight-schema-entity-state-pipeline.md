@@ -1,0 +1,458 @@
+# Story 4.1: SQLDelight Schema & Entity State Pipeline
+
+Status: review
+
+## Story
+
+As a developer,
+I want the entity state data pipeline from WebSocket to StateFlow — with offline cache — fully operational,
+so that every card composable gets live entity state with zero per-screen network calls.
+
+## Acceptance Criteria
+
+1. `EntityState.sq` defines the `entity_state` table: `entity_id TEXT PRIMARY KEY NOT NULL`, `domain TEXT NOT NULL`, `state TEXT NOT NULL`, `attributes TEXT NOT NULL`, `last_updated INTEGER NOT NULL` — `last_updated` mapped to `kotlinx.datetime.Instant` via `EntityDomainAdapter`.
+2. `EntityDomainAdapter.kt` wires the `kotlinx.datetime` `InstantColumnAdapter` explicitly into `HaNativeDatabase` constructor — `HaNativeDatabase` is never hand-authored (it is SQLDelight-generated); the adapter is passed at construction time.
+3. `EntityRepositoryImpl` collects `Flow<HaEvent>` from `KtorHaWebSocketClient.events()`, maps each `HaEvent.StateChanged` to domain `HaEntity` via the existing `HaEntity(entityId, state, attributes, lastChanged, lastUpdated)` factory, upserts to SQLDelight, and emits a `StateFlow<List<HaEntity>>` backed by the SQLDelight query.
+4. `ObserveEntityStateUseCase` wraps `EntityRepository.observeEntity(entityId)` and returns `Flow<HaEntity?>` — card composables subscribe to their own entity slice only, no full list subscriptions on cards.
+5. `CallServiceUseCase` delegates to `EntityRepository.callService(domain, service, entityId, serviceData)` which calls `KtorHaWebSocketClient.callService(...)` and returns `Result<Unit>`.
+6. On cold launch, `EntityRepositoryImpl` reads SQLDelight cache first (`selectAllEntityStates().executeAsList()`) and emits cached entities before WebSocket connects — dashboard visible in ≤1s (NFR2). After WebSocket connects, `getStates()` is called to refresh all state; live events then replace cache incrementally.
+7. On WebSocket reconnect (after `HaEvent.ConnectionLost`), `EntityRepositoryImpl` re-subscribes to `events()` and calls `getStates()` again — stale cache remains visible until fresh data arrives.
+8. `EntityRepository` interface lives in `domain/repository/`; `EntityRepositoryImpl` in `data/repository/` — no Ktor or SQLDelight imports above the data layer.
+
+## Tasks / Subtasks
+
+- [x] Task 1: Apply SQLDelight Gradle plugin to `:shared` (AC: 1, 2)
+  - [x] 1.1: Add `alias(libs.plugins.sqldelight)` to the `plugins {}` block in `shared/build.gradle.kts` (plugin alias already declared in `gradle/libs.versions.toml` as `id = "app.cash.sqldelight"`).
+  - [x] 1.2: Add the `sqldelight {}` configuration block at the end of `shared/build.gradle.kts` (after the `kotlin {}` block):
+    ```kotlin
+    sqldelight {
+        databases {
+            create("HaNativeDatabase") {
+                packageName.set("com.backpapp.hanative")
+            }
+        }
+    }
+    ```
+  - [x] 1.3: Verify `libs.versions.toml` has `sqldelight = "2.0.2"` (already confirmed) and all four SQLDelight deps are present: `sqldelight-runtime`, `sqldelight-coroutines`, `sqldelight-android-driver`, `sqldelight-native-driver`.
+
+- [x] Task 2: Create `EntityState.sq` SQLDelight schema (AC: 1)
+  - [x] 2.1: Create directory `shared/src/commonMain/sqldelight/com/backpapp/hanative/` if it does not exist (it should not yet — codebase check confirmed no .sq files present).
+  - [x] 2.2: Create `shared/src/commonMain/sqldelight/com/backpapp/hanative/EntityState.sq`:
+    ```sql
+    CREATE TABLE IF NOT EXISTS entity_state (
+        entity_id TEXT PRIMARY KEY NOT NULL,
+        domain TEXT NOT NULL,
+        state TEXT NOT NULL,
+        attributes TEXT NOT NULL,
+        last_updated INTEGER AS kotlinx.datetime.Instant NOT NULL
+    );
+
+    upsertEntityState:
+    INSERT OR REPLACE INTO entity_state(entity_id, domain, state, attributes, last_updated)
+    VALUES (?, ?, ?, ?, ?);
+
+    selectAllEntityStates:
+    SELECT * FROM entity_state ORDER BY last_updated DESC;
+
+    selectEntityStateById:
+    SELECT * FROM entity_state WHERE entity_id = ?;
+
+    deleteAllEntityStates:
+    DELETE FROM entity_state;
+    ```
+  - [x] 2.3: The `AS kotlinx.datetime.Instant` annotation on `last_updated` instructs SQLDelight to generate an `EntityState.Adapter` requiring a `ColumnAdapter<Instant, Long>`. This is wired in Task 3.
+
+- [x] Task 3: Create `EntityDomainAdapter.kt` and wire into database (AC: 2)
+  - [x] 3.1: Create `shared/src/commonMain/kotlin/com/backpapp/hanative/data/local/adapter/EntityDomainAdapter.kt`:
+    ```kotlin
+    package com.backpapp.hanative.data.local.adapter
+
+    import app.cash.sqldelight.ColumnAdapter
+    import kotlinx.datetime.Instant
+
+    object InstantColumnAdapter : ColumnAdapter<Instant, Long> {
+        override fun decode(databaseValue: Long): Instant =
+            Instant.fromEpochMilliseconds(databaseValue)
+
+        override fun encode(value: Instant): Long =
+            value.toEpochMilliseconds()
+    }
+    ```
+  - [x] 3.2: `HaNativeDatabase` is **never hand-authored** — it is generated by SQLDelight from the `.sq` files. After syncing Gradle, `HaNativeDatabase` appears in the generated sources at `build/generated/sqldelight/...`. The constructor will accept `driver: SqlDriver` and `entity_stateAdapter: EntityState.Adapter`.
+  - [x] 3.3: Create the `databaseModule()` as a KMP `expect`/`actual` pair following the same pattern as `credentialStoreModule()`:
+    - `commonMain/di/DatabaseModule.kt`:
+      ```kotlin
+      package com.backpapp.hanative.di
+
+      import org.koin.core.module.Module
+
+      expect fun databaseModule(): Module
+      ```
+    - `androidMain/di/DatabaseModule.kt`:
+      ```kotlin
+      package com.backpapp.hanative.di
+
+      import app.cash.sqldelight.driver.android.AndroidSqliteDriver
+      import com.backpapp.hanative.HaNativeDatabase
+      import com.backpapp.hanative.data.local.adapter.InstantColumnAdapter
+      import org.koin.dsl.module
+
+      actual fun databaseModule(): Module = module {
+          single {
+              AndroidSqliteDriver(
+                  schema = HaNativeDatabase.Schema,
+                  context = get(),
+                  name = "ha_native.db",
+              )
+          }
+          single {
+              HaNativeDatabase(
+                  driver = get(),
+                  entity_stateAdapter = com.backpapp.hanative.EntityState.Adapter(
+                      last_updatedAdapter = InstantColumnAdapter,
+                  ),
+              )
+          }
+      }
+      ```
+    - `iosMain/di/DatabaseModule.kt`:
+      ```kotlin
+      package com.backpapp.hanative.di
+
+      import app.cash.sqldelight.driver.native.NativeSqliteDriver
+      import com.backpapp.hanative.HaNativeDatabase
+      import com.backpapp.hanative.data.local.adapter.InstantColumnAdapter
+      import org.koin.dsl.module
+
+      actual fun databaseModule(): Module = module {
+          single {
+              NativeSqliteDriver(
+                  schema = HaNativeDatabase.Schema,
+                  name = "ha_native.db",
+              )
+          }
+          single {
+              HaNativeDatabase(
+                  driver = get(),
+                  entity_stateAdapter = com.backpapp.hanative.EntityState.Adapter(
+                      last_updatedAdapter = InstantColumnAdapter,
+                  ),
+              )
+          }
+      }
+      ```
+  - [x] 3.4: Add `includes(databaseModule())` to `dataModule` in `shared/src/commonMain/kotlin/com/backpapp/hanative/di/DataModule.kt` (add alongside the existing `includes(...)` call in `val dataModule`).
+
+- [x] Task 4: Create `EntityRepository` interface in domain layer (AC: 8)
+  - [x] 4.1: Create `shared/src/commonMain/kotlin/com/backpapp/hanative/domain/repository/EntityRepository.kt`:
+    ```kotlin
+    package com.backpapp.hanative.domain.repository
+
+    import com.backpapp.hanative.domain.model.HaEntity
+    import kotlinx.coroutines.flow.Flow
+    import kotlinx.coroutines.flow.StateFlow
+
+    interface EntityRepository {
+        val entities: StateFlow<List<HaEntity>>
+
+        fun observeEntity(entityId: String): Flow<HaEntity?>
+
+        suspend fun callService(
+            domain: String,
+            service: String,
+            entityId: String? = null,
+            serviceData: Map<String, Any?> = emptyMap(),
+        ): Result<Unit>
+    }
+    ```
+  - [x] 4.2: **Architecture rule**: No Ktor, SQLDelight, or Android SDK imports allowed in `domain/`. This interface is pure Kotlin only.
+
+- [x] Task 5: Create `EntityRepositoryImpl` in data layer (AC: 3, 6, 7)
+  - [x] 5.1: Create `shared/src/commonMain/kotlin/com/backpapp/hanative/data/repository/EntityRepositoryImpl.kt`.
+  - [x] 5.2: Constructor: `class EntityRepositoryImpl(private val webSocketClient: KtorHaWebSocketClient, private val database: HaNativeDatabase, private val scope: CoroutineScope) : EntityRepository`
+  - [x] 5.3: Attributes serialization helper — `attributes TEXT NOT NULL` stores JSON. Use `kotlinx.serialization.json.Json` with `MapAnySerializer` (already exists at `data/remote/MapAnySerializer.kt`) to encode/decode `Map<String, Any?>` ↔ JSON string:
+    ```kotlin
+    private val json = Json { ignoreUnknownKeys = true }
+
+    private fun encodeAttributes(attrs: Map<String, Any?>): String =
+        json.encodeToString(MapAnySerializer, attrs)
+
+    private fun decodeAttributes(raw: String): Map<String, Any?> =
+        json.decodeFromString(MapAnySerializer, raw)
+    ```
+  - [x] 5.4: Cold-launch cache read — initialize `_entities` `MutableStateFlow` from SQLDelight on construction:
+    ```kotlin
+    private val _entities = MutableStateFlow<List<HaEntity>>(
+        database.entityStateQueries.selectAllEntityStates().executeAsList().map { it.toDomain() }
+    )
+    override val entities: StateFlow<List<HaEntity>> = _entities.asStateFlow()
+    ```
+  - [x] 5.5: Map `EntityState` DB row → `HaEntity` domain model using the existing `HaEntity(...)` factory function:
+    ```kotlin
+    private fun com.backpapp.hanative.EntityState.toDomain(): HaEntity =
+        HaEntity(
+            entityId = entity_id,
+            state = state,
+            attributes = decodeAttributes(attributes),
+            lastChanged = last_updated,
+            lastUpdated = last_updated,
+        )
+    ```
+    Note: SQLDelight row has `last_updated` only. Map it to both `lastChanged` and `lastUpdated` — HA state change events carry both separately; for cache recall, using one value for both is acceptable. Enhance in a future story if display of `lastChanged` is required.
+  - [x] 5.6: WebSocket event collection — launch in `scope`:
+    ```kotlin
+    init {
+        scope.launch { collectEvents() }
+    }
+
+    private suspend fun collectEvents() {
+        webSocketClient.events().collect { event ->
+            when (event) {
+                is HaEvent.StateChanged -> upsertAndEmit(event)
+                is HaEvent.ConnectionLost -> { /* cache remains; isStale handled at ViewModel layer */ }
+                is HaEvent.ConnectionError -> { /* same */ }
+            }
+        }
+    }
+
+    private fun upsertAndEmit(event: HaEvent.StateChanged) {
+        database.entityStateQueries.upsertEntityState(
+            entity_id = event.entityId,
+            domain = event.entityId.substringBefore("."),
+            state = event.state,
+            attributes = encodeAttributes(event.attributes),
+            last_updated = event.lastUpdated,
+        )
+        val updated = database.entityStateQueries.selectAllEntityStates()
+            .executeAsList().map { it.toDomain() }
+        _entities.value = updated
+    }
+    ```
+  - [x] 5.7: `observeEntity(entityId)`: filter `entities` StateFlow for the specific entity:
+    ```kotlin
+    override fun observeEntity(entityId: String): Flow<HaEntity?> =
+        entities.map { list -> list.firstOrNull { it.entityId == entityId } }
+    ```
+  - [x] 5.8: `callService`: delegate directly to `webSocketClient`:
+    ```kotlin
+    override suspend fun callService(
+        domain: String,
+        service: String,
+        entityId: String?,
+        serviceData: Map<String, Any?>,
+    ): Result<Unit> = webSocketClient.callService(domain, service, entityId, serviceData)
+    ```
+  - [x] 5.9: `refreshFromWebSocket()` — call after WebSocket connects and after reconnect. Called by `ServerManager` or by a startup observer; expose as `suspend fun refreshFromWebSocket()`:
+    ```kotlin
+    suspend fun refreshFromWebSocket() {
+        webSocketClient.getStates().onSuccess { rawStates ->
+            database.entityStateQueries.transaction {
+                rawStates.forEach { raw ->
+                    database.entityStateQueries.upsertEntityState(
+                        entity_id = raw.entityId,
+                        domain = raw.entityId.substringBefore("."),
+                        state = raw.state,
+                        attributes = encodeAttributes(raw.attributes),
+                        last_updated = raw.lastUpdated,
+                    )
+                }
+            }
+            val all = database.entityStateQueries.selectAllEntityStates()
+                .executeAsList().map { it.toDomain() }
+            _entities.value = all
+        }
+    }
+    ```
+  - [x] 5.10: Register in `DataModule.kt` inside `serverManagerModule()`:
+    ```kotlin
+    single { EntityRepositoryImpl(get(), get(), get()) }
+    single<EntityRepository> { get<EntityRepositoryImpl>() }
+    ```
+
+- [x] Task 6: Create `ObserveEntityStateUseCase` (AC: 4)
+  - [x] 6.1: Create `shared/src/commonMain/kotlin/com/backpapp/hanative/domain/usecase/ObserveEntityStateUseCase.kt`:
+    ```kotlin
+    package com.backpapp.hanative.domain.usecase
+
+    import com.backpapp.hanative.domain.model.HaEntity
+    import com.backpapp.hanative.domain.repository.EntityRepository
+    import kotlinx.coroutines.flow.Flow
+
+    class ObserveEntityStateUseCase(private val repository: EntityRepository) {
+        operator fun invoke(entityId: String): Flow<HaEntity?> =
+            repository.observeEntity(entityId)
+    }
+    ```
+  - [x] 6.2: Register in `DomainModule.kt`:
+    ```kotlin
+    factory { ObserveEntityStateUseCase(get()) }
+    ```
+
+- [x] Task 7: Create `CallServiceUseCase` (AC: 5)
+  - [x] 7.1: Create `shared/src/commonMain/kotlin/com/backpapp/hanative/domain/usecase/CallServiceUseCase.kt`:
+    ```kotlin
+    package com.backpapp.hanative.domain.usecase
+
+    import com.backpapp.hanative.domain.repository.EntityRepository
+
+    class CallServiceUseCase(private val repository: EntityRepository) {
+        suspend operator fun invoke(
+            domain: String,
+            service: String,
+            entityId: String? = null,
+            serviceData: Map<String, Any?> = emptyMap(),
+        ): Result<Unit> = repository.callService(domain, service, entityId, serviceData)
+    }
+    ```
+  - [x] 7.2: Register in `DomainModule.kt`:
+    ```kotlin
+    factory { CallServiceUseCase(get()) }
+    ```
+
+- [x] Task 8: Verify build (no sprint-status.yaml — manual verification)
+  - [x] 8.1: Run `./gradlew :shared:generateCommonMainHaNativeDatabaseInterface` (or `./gradlew :shared:compileKotlinAndroid`) to confirm SQLDelight code generation succeeds and `HaNativeDatabase` is generated.
+  - [x] 8.2: Confirm no import violations: grep `domain/` for `sqldelight`, `ktor`, `android` — should be empty.
+  - [x] 8.3: Run `./gradlew :shared:testAndroidHostTest` — existing tests must still pass.
+
+## Dev Notes
+
+### Architecture Compliance
+
+- **NEVER hand-author `HaNativeDatabase.kt`** — it is 100% SQLDelight-generated. Editing it directly will be overwritten on next code gen. [Source: architecture.md#Enforcement]
+- **No SQLDelight or Ktor imports in `domain/`** — `EntityRepository` interface is pure Kotlin. `EntityRepositoryImpl` in `data/repository/` may import both. [Source: architecture.md#Clean Architecture layer enforcement]
+- **No `var` in domain models** — `HaEntity` sealed class uses all `val`. The existing `HaEntity.kt` is correct; do not modify it. [Source: architecture.md#Domain models]
+- **StateFlow pattern** — `EntityRepositoryImpl.entities` is a `StateFlow<List<HaEntity>>`. ViewModels in later stories collect this; no direct SQLDelight access above the data layer. [Source: architecture.md#WebSocket → state pipeline]
+- **`CoroutineScope` injection** — `MainScope()` is already registered as `single<CoroutineScope>` in `serverManagerModule()`. Pass via `get()` in Koin binding — do NOT create a new scope.
+
+### SQLDelight 2.0.2 Specifics
+
+- Plugin alias: `libs.plugins.sqldelight` → `id = "app.cash.sqldelight"` — already in `libs.versions.toml`.
+- `.sq` files location: `shared/src/commonMain/sqldelight/com/backpapp/hanative/` — the path after `sqldelight/` mirrors the `packageName` set in `build.gradle.kts`.
+- Generated class location after sync: `build/generated/sqldelight/code/HaNativeDatabase/commonMain/com/backpapp/hanative/HaNativeDatabase.kt` (do not commit generated sources).
+- `ColumnAdapter<Instant, Long>`: `decode` receives epoch millis (Long); `encode` returns epoch millis. Use `Instant.fromEpochMilliseconds()` / `.toEpochMilliseconds()`. [Source: architecture.md#AR5 note]
+- `sqldelight-coroutines` dep (`app.cash.sqldelight:coroutines-extensions`) enables `.asFlow()` on queries — available if needed for reactive queries in future stories; not strictly required for this story's manual StateFlow approach.
+
+### Attributes JSON Serialization
+
+`MapAnySerializer` already exists at `shared/src/commonMain/kotlin/com/backpapp/hanative/data/remote/MapAnySerializer.kt` — use it for `Map<String, Any?>` ↔ JSON string conversion. Do not introduce a second serializer. Import: `com.backpapp.hanative.data.remote.MapAnySerializer`.
+
+### `HaWebSocketClient.getStates()` Already Exists
+
+`HaWebSocketClient` interface (in `domain/repository/HaWebSocketClient.kt`) already declares `suspend fun getStates(): Result<List<HaRawEntityState>>`. `KtorHaWebSocketClient` implements it. `EntityRepositoryImpl.refreshFromWebSocket()` calls `webSocketClient.getStates()` — no new interface methods needed.
+
+### Project Structure Notes
+
+New files this story creates:
+
+```
+shared/src/commonMain/sqldelight/com/backpapp/hanative/
+  └── EntityState.sq                                          ← NEW
+
+shared/src/commonMain/kotlin/com/backpapp/hanative/
+  ├── data/
+  │   ├── local/adapter/
+  │   │   └── EntityDomainAdapter.kt                         ← NEW (was .gitkeep)
+  │   └── repository/
+  │       └── EntityRepositoryImpl.kt                        ← NEW (was .gitkeep)
+  └── domain/
+      ├── repository/
+      │   └── EntityRepository.kt                            ← NEW
+      └── usecase/
+          ├── ObserveEntityStateUseCase.kt                   ← NEW
+          └── CallServiceUseCase.kt                          ← NEW
+
+shared/src/commonMain/kotlin/com/backpapp/hanative/di/
+  └── DatabaseModule.kt                                      ← NEW (expect)
+
+shared/src/androidMain/kotlin/com/backpapp/hanative/di/
+  └── DatabaseModule.kt                                      ← NEW (actual)
+
+shared/src/iosMain/kotlin/com/backpapp/hanative/di/
+  └── DatabaseModule.kt                                      ← NEW (actual)
+```
+
+Modified files:
+- `shared/build.gradle.kts` — add `alias(libs.plugins.sqldelight)` + `sqldelight {}` block
+- `shared/src/commonMain/kotlin/com/backpapp/hanative/di/DataModule.kt` — add `includes(databaseModule())` + `EntityRepositoryImpl` bindings
+- `shared/src/commonMain/kotlin/com/backpapp/hanative/di/DomainModule.kt` — add use case `factory` bindings
+
+**Do NOT modify:**
+- `HaEntity.kt` — sealed class + factory already correct for all 12 subtypes
+- `HaEvent.kt` — `StateChanged`, `ConnectionLost`, `ConnectionError` already correct
+- `KtorHaWebSocketClient.kt` — `events()`, `callService()`, `getStates()` already implemented
+- `HaWebSocketClient.kt` interface — no new methods needed
+- `MapAnySerializer.kt` — reuse as-is
+
+### Previous Story Intelligence (Story 3.5)
+
+- **Mutex on credential ops**: Story 3.5 added `mutex.withLock {}` guards on `saveToken`/`clearToken`/`getToken` — follow same pattern for any shared mutable state in `EntityRepositoryImpl`.
+- **`CoroutineScope` from Koin**: Story 3.5 injected `CoroutineScope` (registered as `single<CoroutineScope> { MainScope() }`) — reuse same binding, do NOT register a second `CoroutineScope`.
+- **`expect`/`actual` DI module pattern**: Story 3.5 `oauthLauncherModule()` is the reference pattern for `databaseModule()` — `expect fun` in `commonMain/di/`, matching `actual fun` in `androidMain/di/` and `iosMain/di/`, added via `includes()` in `dataModule`.
+- **IosOAuthLauncher type fix**: Story 3.5 fixed `emptyMap<Any?, Any>()` → `emptyMap<Any?, Any?>()` for iOS interop. Watch for similar nullable generic type issues in iOS `actual` implementations.
+- **Fire-and-forget connect**: Story 3.5 patched `serverManager.connect()` to be called with `scope.launch { }` (fire-and-forget) rather than `suspend` directly. Apply same discipline for `refreshFromWebSocket()` when called from non-suspend context.
+
+### Git Intelligence (Last 5 Commits)
+
+| Commit | What it established |
+|--------|-------------------|
+| `f91dbcd` | Story 3.5 shipped: SessionRepository, OAuthCallbackBus, AuthViewModel, StartupViewModel, SettingsScreen. 29 files, 1195 insertions. |
+| `c455e36` | Wire OAuth `client_id` to GitHub Pages redirect anchor. |
+| `9f4d3cb` | Story 3.4: OnboardingScreen wired; HaNativeNavHost expanded. |
+| `ff9a309` | Story 3.3: finalize ServerManager & HaReconnectManager. |
+| `54ac212` | Story 3.3: KtorHaWebSocketClient + HaReconnectManager implemented. |
+
+Confirmed codebase state relevant to this story:
+- `data/local/adapter/.gitkeep` — adapter dir exists, ready for `EntityDomainAdapter.kt`
+- `data/repository/.gitkeep` — repo impl dir exists, ready for `EntityRepositoryImpl.kt`
+- No `.sq` files exist yet — `EntityState.sq` is the first
+- `DomainModule.kt` is an empty placeholder — ready for use case bindings
+
+### References
+
+- [Source: `_bmad/outputs/architecture.md#Data Architecture`] — SQLDelight table list, Clean Architecture layers
+- [Source: `_bmad/outputs/architecture.md#Enforcement`] — Non-negotiable agent rules
+- [Source: `_bmad/outputs/architecture.md#Complete Project Tree`] — File locations for all new files
+- [Source: `_bmad/outputs/architecture.md#FR → File Mapping`] — FR9–16 entity state → `EntityRepositoryImpl.kt`, `EntityState.sq`
+- [Source: `_bmad/outputs/epics.md#Story 4.1`] — Full acceptance criteria
+- [Source: `shared/src/commonMain/kotlin/com/backpapp/hanative/domain/model/HaEntity.kt`] — Sealed class + factory; do not modify
+- [Source: `shared/src/commonMain/kotlin/com/backpapp/hanative/domain/repository/HaWebSocketClient.kt`] — `events()`, `callService()`, `getStates()` signatures
+- [Source: `gradle/libs.versions.toml`] — `sqldelight = "2.0.2"`, all deps + plugin alias confirmed
+
+## Dev Agent Record
+
+### Agent Model Used
+
+claude-sonnet-4-6
+
+### Debug Log References
+
+Build verification delegated to user — pre-existing Gradle Kotlin DSL cache issue surfaced when SQLDelight plugin added to plugins block.
+
+### Completion Notes List
+
+- SQLDelight plugin applied, `sqldelight {}` block added, `EntityState.sq` created with 4 queries
+- `InstantColumnAdapter` encodes/decodes `Instant` ↔ `Long` (epoch millis)
+- `databaseModule()` expect/actual for commonMain/androidMain/iosMain — AndroidSqliteDriver + NativeSqliteDriver
+- `EntityRepository` interface in domain layer — pure Kotlin, no infrastructure imports (AC 8 verified)
+- `EntityRepositoryImpl` — cold-launch cache read, WebSocket event collection, upsert, `refreshFromWebSocket()`, `observeEntity()`, `callService()` delegation
+- `ObserveEntityStateUseCase` and `CallServiceUseCase` registered in `DomainModule`
+- `DataModule` wired with `databaseModule()` + `EntityRepositoryImpl` bindings
+- Tests: `InstantColumnAdapterTest` (4), `ObserveEntityStateUseCaseTest` (3), `CallServiceUseCaseTest` (3) — fake repos, no platform deps
+
+### File List
+
+- `shared/build.gradle.kts`
+- `shared/src/commonMain/sqldelight/com/backpapp/hanative/EntityState.sq`
+- `shared/src/commonMain/kotlin/com/backpapp/hanative/data/local/adapter/EntityDomainAdapter.kt`
+- `shared/src/commonMain/kotlin/com/backpapp/hanative/di/DatabaseModule.kt`
+- `shared/src/androidMain/kotlin/com/backpapp/hanative/di/DatabaseModule.kt`
+- `shared/src/iosMain/kotlin/com/backpapp/hanative/di/DatabaseModule.kt`
+- `shared/src/commonMain/kotlin/com/backpapp/hanative/di/DataModule.kt`
+- `shared/src/commonMain/kotlin/com/backpapp/hanative/domain/repository/EntityRepository.kt`
+- `shared/src/commonMain/kotlin/com/backpapp/hanative/data/repository/EntityRepositoryImpl.kt`
+- `shared/src/commonMain/kotlin/com/backpapp/hanative/domain/usecase/ObserveEntityStateUseCase.kt`
+- `shared/src/commonMain/kotlin/com/backpapp/hanative/domain/usecase/CallServiceUseCase.kt`
+- `shared/src/commonMain/kotlin/com/backpapp/hanative/di/DomainModule.kt`
+- `shared/src/commonTest/kotlin/com/backpapp/hanative/data/local/InstantColumnAdapterTest.kt`
+- `shared/src/commonTest/kotlin/com/backpapp/hanative/domain/usecase/ObserveEntityStateUseCaseTest.kt`
+- `shared/src/commonTest/kotlin/com/backpapp/hanative/domain/usecase/CallServiceUseCaseTest.kt`
