@@ -15,11 +15,13 @@ class AuthenticationRepositoryImpl(
             ?: throw IllegalStateException("No access token stored. Complete onboarding first.")
     }
 
+    suspend fun getToken(): String? = mutex.withLock { credentialStore.getToken() }
+
     suspend fun saveToken(token: String) {
-        credentialStore.saveToken(token)
+        mutex.withLock { credentialStore.saveToken(token) }
     }
 
     suspend fun clearToken() {
-        credentialStore.clear()
+        mutex.withLock { credentialStore.clear() }
     }
 }

@@ -72,3 +72,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+

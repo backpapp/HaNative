@@ -57,3 +57,10 @@
 - **`urlInput` has no length cap** — `rememberSaveable` could push pathological paste into Bundle > 1MB on save; defensive edge.
 - **`testUrl` appends `/api/` to user-provided path** — `http://host/lovelace` becomes `/lovelace/api/`; user-error tolerance, low-pri.
 - **Generic error message collapses 401/auth/TLS/timeout/malformed signals into one bucket** — AC4 pins exact single string for MVP; revisit when error UX is iterated.
+
+## Deferred from: code review of 3-5-onboarding-authentication-session-persistence (2026-04-30)
+
+- **MainScope singleton leaks coroutines across logout** [`DataModule.kt:30`] — pre-existing Story 3.3 architecture; `MainScope` is never cancelled; coroutines launched inside `ServerManager.connect/initialize` outlive the session boundary across logout/re-login cycles.
+- **`ServerManager.initialize()` registers duplicate `onForeground` listener on repeated calls** [`ServerManager.kt`] — pre-existing Story 3.3; each `initialize()` appends a new lifecycle listener without deregistering the prior one; repeated initialize (startup + auth success) registers two listeners, triggering duplicate reconnect attempts.
+- **OAuth `refresh_token` silently discarded** [`AuthViewModel.onOAuthCallback`] — explicitly out of scope per Story 3.5 Dev Notes; HA OAuth access tokens expire (~30min); Story 3.6 to implement token refresh on 401.
+- **`SessionRepository.hasValidSession()` checks presence not expiry** [`SessionRepository.kt`] — stored but expired/revoked token passes the check; app reaches Dashboard then fails at WebSocket auth; Story 3.6 to add expiry/refresh logic.

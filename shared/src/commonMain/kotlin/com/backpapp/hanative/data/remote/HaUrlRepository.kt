@@ -7,6 +7,7 @@ import com.backpapp.hanative.data.local.HaSettingsKeys
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 
 private const val TEST_URL_TIMEOUT_MS = 10_000L
@@ -38,6 +39,19 @@ class HaUrlRepository(
             dataStore.edit { prefs ->
                 prefs[HaSettingsKeys.HA_URL] = url
             }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getUrl(): String? = dataStore.data.first()[HaSettingsKeys.HA_URL]
+
+    suspend fun clearUrl(): Result<Unit> {
+        return try {
+            dataStore.edit { prefs -> prefs.remove(HaSettingsKeys.HA_URL) }
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e

@@ -13,11 +13,13 @@ import io.ktor.client.call.body
 import io.ktor.client.request.forms.submitForm
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.Parameters
+import io.ktor.http.URLBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 
 sealed class AuthUiState {
     data object Idle : AuthUiState()
@@ -50,6 +52,9 @@ class AuthViewModel(
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
+    // Prevents concurrent token-exchange coroutines when bus delivers multiple emissions.
+    private val oauthExchangeMutex = Mutex()
+
     init {
         viewModelScope.launch {
             oauthCallbackBus.codes.collect { code -> onOAuthCallback(code) }
@@ -80,7 +85,7 @@ class AuthViewModel(
                 }
                 authRepository.saveToken(trimmed)
                 serverManager.initialize(lanUrl = url)
-                serverManager.connect()
+                viewModelScope.launch { serverManager.connect() }
                 _uiState.value = AuthUiState.Success
             } catch (e: CancellationException) {
                 throw e
@@ -97,28 +102,37 @@ class AuthViewModel(
      */
     fun startOAuthFlow() {
         if (_uiState.value is AuthUiState.Loading) return
+        _uiState.value = AuthUiState.Loading
         viewModelScope.launch {
-            val haUrl = urlRepository.getUrl()
-            if (haUrl.isNullOrBlank()) {
-                _uiState.value = AuthUiState.Error(MISSING_URL)
-                return@launch
+            try {
+                val haUrl = urlRepository.getUrl()
+                if (haUrl.isNullOrBlank()) {
+                    _uiState.value = AuthUiState.Error(MISSING_URL)
+                    return@launch
+                }
+                val authorizeUrl = URLBuilder("${haUrl.trimEnd('/')}/auth/authorize").apply {
+                    parameters.append("client_id", CLIENT_ID)
+                    parameters.append("redirect_uri", REDIRECT_URI)
+                    parameters.append("response_type", "code")
+                }.buildString()
+                oauthLauncher.launch(authorizeUrl)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) {
+                _uiState.value = AuthUiState.Error(GENERIC_ERROR)
             }
-            _uiState.value = AuthUiState.Loading
-            val authorizeUrl = "${haUrl.trimEnd('/')}/auth/authorize" +
-                "?client_id=$CLIENT_ID" +
-                "&redirect_uri=$REDIRECT_URI" +
-                "&response_type=code"
-            oauthLauncher.launch(authorizeUrl)
         }
     }
 
-    fun onOAuthCallback(code: String?) {
+    private fun onOAuthCallback(code: String?) {
         if (_uiState.value !is AuthUiState.Loading) return
         if (code.isNullOrBlank()) {
             _uiState.value = AuthUiState.Error(OAUTH_CANCELLED)
+            oauthCallbackBus.resetReplay()
             return
         }
         viewModelScope.launch {
+            if (!oauthExchangeMutex.tryLock()) return@launch
             try {
                 val haUrl = urlRepository.getUrl()
                 if (haUrl.isNullOrBlank()) {
@@ -131,6 +145,7 @@ class AuthViewModel(
                         append("grant_type", "authorization_code")
                         append("code", code)
                         append("client_id", CLIENT_ID)
+                        append("redirect_uri", REDIRECT_URI)
                     },
                 )
                 if (response.status.value !in 200..299) {
@@ -140,12 +155,15 @@ class AuthViewModel(
                 val body = response.body<AuthTokenResponseDto>()
                 authRepository.saveToken(body.accessToken)
                 serverManager.initialize(lanUrl = haUrl)
-                serverManager.connect()
+                viewModelScope.launch { serverManager.connect() }
                 _uiState.value = AuthUiState.Success
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Throwable) {
                 _uiState.value = AuthUiState.Error(OAUTH_TOKEN_EXCHANGE_FAILED)
+            } finally {
+                oauthExchangeMutex.unlock()
+                oauthCallbackBus.resetReplay()
             }
         }
     }

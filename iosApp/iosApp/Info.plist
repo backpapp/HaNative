@@ -36,5 +36,17 @@
         <string>_home-assistant._tcp</string>
         <string>_hass-mobile-app._tcp</string>
     </array>
+    <!-- Story 3.5 — OAuth callback URL scheme (hanative://auth-callback?code=...) -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.backpapp.hanative.oauth</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>hanative</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>

@@ -5,7 +5,9 @@ import com.backpapp.hanative.data.remote.HaReconnectManager
 import com.backpapp.hanative.data.remote.HaUrlRepository
 import com.backpapp.hanative.data.remote.KtorHaWebSocketClient
 import com.backpapp.hanative.data.remote.ServerManager
+import com.backpapp.hanative.data.remote.SessionRepository
 import com.backpapp.hanative.domain.repository.HaWebSocketClient
+import com.backpapp.hanative.platform.OAuthCallbackBus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import org.koin.core.module.Module
@@ -20,6 +22,7 @@ val dataModule = module {
         appLifecycleObserverModule(),
         httpClientModule(),
         serverManagerModule(),
+        oauthLauncherModule(),
     )
 }
 
@@ -39,6 +42,8 @@ fun serverManagerModule(): Module = module {
             scope = get(),
         )
     }
+    single { OAuthCallbackBus() }
+    single { SessionRepository(get(), get(), get(), get()) }
 }
 
 expect fun hapticEngineModule(): Module
@@ -47,3 +52,4 @@ expect fun settingsDataStoreModule(): Module
 expect fun serverDiscoveryModule(): Module
 expect fun appLifecycleObserverModule(): Module
 expect fun httpClientModule(): Module
+expect fun oauthLauncherModule(): Module

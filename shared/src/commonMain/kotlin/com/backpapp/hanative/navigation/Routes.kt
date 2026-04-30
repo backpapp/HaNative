@@ -11,3 +11,6 @@ data object AuthRoute : NavKey
 
 @Serializable
 data object DashboardRoute : NavKey
+
+@Serializable
+data object SettingsRoute : NavKey
