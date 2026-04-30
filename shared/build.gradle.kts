@@ -46,6 +46,7 @@ kotlin {
             api(compose.runtime)
             api(compose.foundation)
             api(compose.material3)
+            implementation(compose.materialIconsExtended)
             implementation(compose.components.resources)
 
             // Kotlin extensions
@@ -82,6 +83,8 @@ kotlin {
         }
 
         androidMain.dependencies {
+            // Compose preview tooling annotations (Android-only)
+            implementation(libs.compose.ui.tooling.preview)
             // Ktor engine for Android
             implementation(libs.ktor.client.cio)
             // SQLDelight driver for Android

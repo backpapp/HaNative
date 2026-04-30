@@ -79,3 +79,11 @@
 - Use cases pass through with no input validation (AddCardUseCase.kt etc.) — caller responsibility.
 - Test names use backticks-with-spaces; KMP Native portability risk (DashboardUseCaseTest.kt, GetDashboardsUseCaseTest.kt) — currently runs on JVM only.
 - `dbMutex` redundant for SQLite write serialization and absent from read path (DashboardRepositoryImpl.kt:26,...) — no functional bug.
+
+## Deferred from: code review of story-4.3 (2026-04-30)
+
+- `friendlyName` returns empty string for empty entityId or "light." (no object_id) — edge case unlikely from real HA. [EntityCard.kt:308-317]
+- Future timestamps (server clock skew) silently render "0m ago" via `coerceAtLeast(0L)` — masks real bugs but cosmetic. [EntityCard.kt:333-338]
+- Unsupported HaEntity subtypes (Climate/Cover/etc.) fall back to `Icons.Outlined.Sensors`, same as real sensors — no visual distinction. Story 4.4+ addresses. [EntityCard.kt:324-331]
+- Recomposition isolation (NFR5) verified by code review only; no `Snapshot.withMutableSnapshot` UI test exists. Spec AC5 accepts code review.
+- `Motion.entityStateChange` is `TweenSpec<Float>` and can't be passed to `animateColorAsState`; equivalent tween re-declared inline. Defer adding a Color-typed token to Motion until a second Color animation needs it. [EntityCard.kt:235-239]
