@@ -4,6 +4,7 @@ import com.backpapp.hanative.domain.usecase.AddCardUseCase
 import com.backpapp.hanative.domain.usecase.CallServiceUseCase
 import com.backpapp.hanative.domain.usecase.DeleteDashboardUseCase
 import com.backpapp.hanative.domain.usecase.GetDashboardsUseCase
+import com.backpapp.hanative.domain.usecase.GetSortedEntitiesUseCase
 import com.backpapp.hanative.domain.usecase.ObserveEntityStateUseCase
 import com.backpapp.hanative.domain.usecase.RemoveCardUseCase
 import com.backpapp.hanative.domain.usecase.ReorderCardsUseCase
@@ -19,4 +20,5 @@ val domainModule = module {
     factory { AddCardUseCase(get()) }
     factory { RemoveCardUseCase(get()) }
     factory { ReorderCardsUseCase(get()) }
+    factory { GetSortedEntitiesUseCase(get()) }
 }

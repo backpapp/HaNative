@@ -98,3 +98,14 @@
 - `appendStaleSuffix` very large deltas render as `"…1051200m ago"` (no hour/day bucketing). Pre-existing from Story 4.3.
 - `else` branch in `EntityCardBody` covers `Cover`/`InputSelect` via `ReadOnlyEntityCard` — proper variants deferred to future stories.
 - Future `HaEntity` sealed subtypes silently fall to `ReadOnlyEntityCard` via `else` — design pattern; revisit when extending sealed hierarchy.
+
+## Deferred from: code review of 4-5-entitypicker-bottom-sheet (2026-05-01)
+
+- `domainOf` uses `entityId.substringBefore('.')` — malformed entity id without dot returns full string as "domain", invisible to chips. HA contract guarantees `domain.id`; defensive normalization deferred.
+- `GetSortedEntitiesUseCase.distinctUntilChanged` does O(N) structural equality on freshly-allocated lists per emission — NFR4 budget still met for 500 entities; revisit if profiling shows recomposition storms.
+- Sort tie-break unstable for entities with identical `lastUpdated` — `thenBy { entityId }` would stabilize; not user-visible today.
+- `LazyColumn(key = { entityId })` crashes if repository emits duplicate entityIds — repository contract prevents; defense-in-depth `distinctBy` deferred.
+- No state-machine UI tests for EntityPicker — Compose UI test runner not wired (Story 4.3 deferred work). Helper coverage only.
+- No accessibility live-region announcement on filter chip tap — wider a11y polish pass.
+- Row `contentDescription` hardcodes "add to dashboard" — parameterize action label when Story 5.x context-engine picker host lands.
+- Skeleton "Loading entities" semantic on animated subtree may re-announce on TalkBack — move to a stable `liveRegion = LiveRegionMode.Polite` parent.
