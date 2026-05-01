@@ -6,12 +6,15 @@ import com.backpapp.hanative.data.remote.HaUrlRepository
 import com.backpapp.hanative.data.remote.KtorHaWebSocketClient
 import com.backpapp.hanative.data.remote.ServerManager
 import com.backpapp.hanative.data.remote.SessionRepository
+import com.backpapp.hanative.data.repository.ActiveDashboardRepositoryImpl
 import com.backpapp.hanative.data.repository.DashboardRepositoryImpl
 import com.backpapp.hanative.data.repository.EntityRepositoryImpl
+import com.backpapp.hanative.domain.repository.ActiveDashboardRepository
 import com.backpapp.hanative.domain.repository.DashboardRepository
 import com.backpapp.hanative.domain.repository.EntityRepository
 import com.backpapp.hanative.domain.repository.HaWebSocketClient
 import com.backpapp.hanative.platform.OAuthCallbackBus
+import com.backpapp.hanative.ui.dashboard.DashboardChrome
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,9 +54,11 @@ fun serverManagerModule(): Module = module {
         )
     }
     single { OAuthCallbackBus() }
+    single { DashboardChrome() }
     single { SessionRepository(get(), get(), get(), get()) }
     single { EntityRepositoryImpl(get(), get(), get()) } bind EntityRepository::class
     single { DashboardRepositoryImpl(get()) } bind DashboardRepository::class
+    single { ActiveDashboardRepositoryImpl(get()) } bind ActiveDashboardRepository::class
 }
 
 expect fun hapticEngineModule(): Module

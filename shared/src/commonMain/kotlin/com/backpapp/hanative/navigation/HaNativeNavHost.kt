@@ -31,11 +31,14 @@ import com.backpapp.hanative.ui.StartupRoute
 import com.backpapp.hanative.ui.StartupViewModel
 import com.backpapp.hanative.ui.WindowSizeClass
 import com.backpapp.hanative.ui.auth.AuthScreen
+import com.backpapp.hanative.ui.dashboard.DashboardChrome
+import com.backpapp.hanative.ui.dashboard.DashboardScreen
 import com.backpapp.hanative.ui.onboarding.OnboardingScreen
 import com.backpapp.hanative.ui.settings.SettingsScreen
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 private val navConfig = SavedStateConfiguration {
@@ -48,8 +51,6 @@ private val navConfig = SavedStateConfiguration {
         }
     }
 }
-
-private val navItems = listOf("Dashboard", "Rooms", "Settings")
 
 @Composable
 fun HaNativeNavHost(modifier: Modifier = Modifier.fillMaxSize()) {
@@ -78,6 +79,12 @@ private fun NavHostContent(
     val current = backStack.lastOrNull()
     val showNavBar = current !is OnboardingRoute && current !is AuthRoute
 
+    val dashboardChrome: DashboardChrome = koinInject()
+    val activeDashboardName by dashboardChrome.activeDashboardName.collectAsStateWithLifecycle()
+    val navItems = remember(activeDashboardName) {
+        listOf(activeDashboardName ?: "Dashboard", "Rooms", "Settings")
+    }
+
     val navContent = @Composable { contentModifier: Modifier ->
         NavDisplay(
             backStack = backStack,
@@ -97,7 +104,7 @@ private fun NavHostContent(
                         },
                     )
                 }
-                entry<DashboardRoute> { Box(Modifier.fillMaxSize()) }
+                entry<DashboardRoute> { DashboardScreen(modifier = Modifier.fillMaxSize()) }
                 entry<SettingsRoute> {
                     SettingsScreen(
                         onLoggedOut = {
@@ -110,15 +117,6 @@ private fun NavHostContent(
         )
     }
 
-    val handleNavItemClick: (Int) -> Unit = { index ->
-        // Settings tab (index 2) — route to SettingsRoute. Other tabs are placeholders.
-        if (index == 2 && backStack.lastOrNull() !is SettingsRoute) {
-            backStack.add(SettingsRoute)
-        }
-    }
-
-    // Derive selected tab from the actual back-stack top so selectedIndex stays in sync
-    // after back-press (e.g. back from SettingsRoute resets to Dashboard tab).
     val selectedIndex by remember {
         derivedStateOf {
             when (backStack.lastOrNull()) {
@@ -128,10 +126,20 @@ private fun NavHostContent(
         }
     }
 
+    val handleNavItemClick: (Int) -> Unit = { index ->
+        when (index) {
+            0 -> {
+                if (selectedIndex == 0) dashboardChrome.requestOpenSwitcher()
+            }
+            2 -> if (backStack.lastOrNull() !is SettingsRoute) backStack.add(SettingsRoute)
+        }
+    }
+
     if (windowSizeClass == WindowSizeClass.EXPANDED) {
         ExpandedLayout(
             modifier = modifier,
             showNavBar = showNavBar,
+            navItems = navItems,
             onNavItemClick = handleNavItemClick,
             navContent = navContent,
         )
@@ -140,6 +148,7 @@ private fun NavHostContent(
             modifier = modifier,
             showNavBar = showNavBar,
             selectedIndex = selectedIndex,
+            navItems = navItems,
             onNavItemClick = handleNavItemClick,
             navContent = navContent,
         )
@@ -151,6 +160,7 @@ private fun CompactLayout(
     modifier: Modifier = Modifier,
     showNavBar: Boolean = true,
     selectedIndex: Int = 0,
+    navItems: List<String>,
     onNavItemClick: (Int) -> Unit = {},
     navContent: @Composable (Modifier) -> Unit,
 ) {
@@ -179,12 +189,12 @@ private fun CompactLayout(
 private fun ExpandedLayout(
     modifier: Modifier = Modifier,
     showNavBar: Boolean = true,
+    navItems: List<String>,
     onNavItemClick: (Int) -> Unit = {},
     navContent: @Composable (Modifier) -> Unit,
 ) {
     Row(modifier = modifier) {
         if (showNavBar) {
-            // Growth hook: NavigationRail placeholder — full rail item styling deferred.
             NavigationRail(modifier = Modifier.fillMaxHeight()) {
                 navItems.forEachIndexed { index, label ->
                     Box(

@@ -19,6 +19,7 @@ class GetDashboardsUseCaseTest {
         object : DashboardRepository {
             override fun getDashboards(): Flow<List<Dashboard>> = flowOf(dashboards)
             override suspend fun saveDashboard(dashboard: Dashboard): Result<Unit> = Result.success(Unit)
+            override suspend fun renameDashboard(dashboardId: String, name: String): Result<Unit> = Result.success(Unit)
             override suspend fun deleteDashboard(dashboardId: String): Result<Unit> = Result.success(Unit)
             override suspend fun addCard(card: DashboardCard): Result<Unit> = Result.success(Unit)
             override suspend fun removeCard(cardId: String): Result<Unit> = Result.success(Unit)

@@ -109,3 +109,39 @@
 - No accessibility live-region announcement on filter chip tap — wider a11y polish pass.
 - Row `contentDescription` hardcodes "add to dashboard" — parameterize action label when Story 5.x context-engine picker host lands.
 - Skeleton "Loading entities" semantic on animated subtree may re-announce on TalkBack — move to a stable `liveRegion = LiveRegionMode.Polite` parent.
+
+## Deferred from: code review of 4-6-dashboard-screen-empty-state-navigation (2026-05-01)
+
+- `distinctUntilChanged` over full `DashboardUiState` reflows on picker toggles (`DashboardViewModel.kt:62`) — perf-only; equality holds on cards so no allocation churn at the data layer.
+- `_haptics.tryEmit` silently drops past `extraBufferCapacity = 4` (`DashboardViewModel.kt:36`) — burst-failure UX; haptics are advisory.
+- AddCard affordance row trailing index may reject end-drop (`DashboardScreen.kt:188`) — verify `sh.calvin.reorderable` 2.4.3 semantics in real testing.
+- `longPressDraggableHandle()` vs `EntityCard` long-press conflict (`DashboardScreen.kt:181`) — EntityCard gesture surface not in this diff.
+- `PresentationModule` reads `ServerManager.connectionState` directly (`PresentationModule.kt:25`) — Story 4.8 introduces `ObserveConnectionStateUseCase`.
+- `addCardWhenDashboardExistsAppendsAtEnd` masks `cards.size` vs `max(position)+1` fragility (`DashboardViewModelTest.kt:893`) — revisit when reorder gaps become possible.
+- `reorderDebouncesAndDispatchesOnce` test omits post-success state-stability assertion (`DashboardViewModelTest.kt:941`) — add coverage when patch P3 lands.
+- `state.cards.map { it.cardId }.toMutableList()` allocates per drag move (`DashboardScreen.kt:166`) — perf-only; lift outside lambda when profiler shows churn.
+- `pickerSlot` invoked on every recomposition with `isVisible = false` (`DashboardScreen.kt:73`) — picker setup cost only material if `EntityPicker` allocates eagerly.
+- `WhileSubscribed(stopTimeoutMillis = 0L)` flashes Loading on rotation (`DashboardViewModel.kt:64`) — swap to 5s if regression seen.
+- `Reorder` with `size < 2` still persists (`DashboardViewModel.kt:142`) — wasted DB write only.
+- No validation that `orderedCardIds.toSet() == active.cards.id.toSet()` (`DashboardViewModel.kt:142`) — relies on use-case contract.
+- `Disconnected` initial state shows `isStale = true` before first connection attempt (`DashboardViewModel.kt:88`) — revisit alongside Story 4.8 stale indicator.
+
+## Deferred from: code review of 4-7-dashboard-management-crud-switcher (2026-05-01)
+
+- `_haptics.tryEmit` drops past `extraBufferCapacity = 4` (`DashboardViewModel.kt`) — burst UX; haptics advisory.
+- `DashboardChrome.openSwitcherSignals` `tryEmit` drops past capacity 1; replay = 0 means cold-start tap can be lost — acknowledged in code comment.
+- `String.take(NAME_MAX_LEN)` cuts mid-grapheme on emoji / combining marks (`DashboardViewModel.kt`) — i18n polish.
+- `handleAddCard` `nextPosition = current.size` may collide with non-contiguous positions — same as Story 4.6 deferred.
+- Picker stays open on save-failure rejection during pending flush — variant of Story 4.6 D1 "picker stays open until success".
+- `Crossfade` does not animate on rename of active dashboard (`DashboardScreen.kt`) — only `activeDashboardId` keys it; rename changes only `dashboardName`. NFR3 covers switch only.
+- No cross-fade on Loading→Success first paint (`DashboardScreen.kt`) — out of NFR3 scope; cold start hard-cut.
+- `DashboardChrome` is `single` — survives logout, old user's name flashes briefly on next login (`DataModule.kt`/`DashboardChrome.kt`) — multi-user polish; not V1 scope.
+- `rememberModalBottomSheetState()` fresh on each visibility — no partial-expansion memory (`DashboardSwitcherSheet.kt`) — M3 idiomatic.
+- `runCatchingNull` swallows DataStore exceptions with no log (`DashboardViewModel.kt`) — diagnosability; add log when infra wired.
+- No duplicate-name guard on dashboards (`DashboardViewModel.kt:handleConfirmCreate`) — spec doesn't mandate; UX polish.
+- Pending row `cardCount` flicker 0→1 on flush (`DashboardSwitcherSheet.kt`) — brief; acceptable.
+- AC3 active-row `Check` icon size unspecified vs leading 24dp (`DashboardSwitcherSheet.kt`) — cosmetic.
+- DropdownMenu name-in-flight shows stale name on next reopen (`DashboardSwitcherSheet.kt`) — polish.
+- Variadic `combine` allocates `Sources` per inner emission (`DashboardViewModel.kt`) — perf-only.
+- `navItems` reallocated per `activeDashboardName` change (`HaNativeNavHost.kt`) — perf-only.
+- `SequentialIdGenerator` overflow fallback `"id-N"` repeats silently (`DashboardViewModelTest.kt`) — test util only.

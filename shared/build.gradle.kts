@@ -80,6 +80,9 @@ kotlin {
             // Navigation 3 (KMP — JetBrains multiplatform artifact, works on Android + iOS + Desktop + Web)
             implementation(libs.navigation3.ui)
 
+            // Reorderable LazyColumn (Compose Multiplatform — Android + iOS Native)
+            implementation(libs.reorderable)
+
         }
 
         androidMain.dependencies {

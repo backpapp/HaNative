@@ -17,6 +17,7 @@ class DashboardUseCaseTest {
     private val fakeRepo: DashboardRepository = object : DashboardRepository {
         override fun getDashboards(): Flow<List<Dashboard>> = flowOf(emptyList())
         override suspend fun saveDashboard(dashboard: Dashboard): Result<Unit> = Result.success(Unit)
+        override suspend fun renameDashboard(dashboardId: String, name: String): Result<Unit> = Result.success(Unit)
         override suspend fun deleteDashboard(dashboardId: String): Result<Unit> = Result.success(Unit)
         override suspend fun addCard(card: DashboardCard): Result<Unit> = Result.success(Unit)
         override suspend fun removeCard(cardId: String): Result<Unit> = Result.success(Unit)
@@ -32,6 +33,12 @@ class DashboardUseCaseTest {
     @Test
     fun `DeleteDashboardUseCase delegates to repository and returns success`() = runTest {
         val result = DeleteDashboardUseCase(fakeRepo)("d1")
+        assertTrue(result.isSuccess)
+    }
+
+    @Test
+    fun `RenameDashboardUseCase delegates to repository and returns success`() = runTest {
+        val result = RenameDashboardUseCase(fakeRepo)("d1", "Office")
         assertTrue(result.isSuccess)
     }
 

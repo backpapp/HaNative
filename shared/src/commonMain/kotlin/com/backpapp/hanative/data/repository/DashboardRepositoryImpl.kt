@@ -78,6 +78,17 @@ class DashboardRepositoryImpl(
         }
     }
 
+    override suspend fun renameDashboard(dashboardId: String, name: String): Result<Unit> = runCatchingCancellable {
+        require(dashboardId.isNotBlank()) { "dashboardId must not be blank" }
+        val trimmed = name.trim()
+        require(trimmed.isNotBlank()) { "name must not be blank" }
+        withContext(Dispatchers.Default) {
+            dbMutex.withLock {
+                database.dashboardQueries.updateDashboardName(name = trimmed, id = dashboardId)
+            }
+        }
+    }
+
     override suspend fun deleteDashboard(dashboardId: String): Result<Unit> = runCatchingCancellable {
         require(dashboardId.isNotBlank()) { "dashboardId must not be blank" }
         withContext(Dispatchers.Default) {
