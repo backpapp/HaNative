@@ -87,3 +87,14 @@
 - Unsupported HaEntity subtypes (Climate/Cover/etc.) fall back to `Icons.Outlined.Sensors`, same as real sensors — no visual distinction. Story 4.4+ addresses. [EntityCard.kt:324-331]
 - Recomposition isolation (NFR5) verified by code review only; no `Snapshot.withMutableSnapshot` UI test exists. Spec AC5 accepts code review.
 - `Motion.entityStateChange` is `TweenSpec<Float>` and can't be passed to `animateColorAsState`; equivalent tween re-declared inline. Defer adding a Color-typed token to Motion until a second Color animation needs it. [EntityCard.kt:235-239]
+
+## Deferred from: code review of story-4.4 (2026-05-01)
+
+- Stepper rapid-tap timer reset — `LaunchedEffect(optimisticTemp)` re-keys on every tap, restarting 5s timeout; reject path may never fire under sustained input. [EntityCard.kt StepperEntityCard]
+- Stepper reconcile race when HA echo returns target unchanged — `LaunchedEffect(entity.targetTemperature)` doesn't re-key on equal echo; optimistic lingers until 5s timeout. [EntityCard.kt StepperEntityCard]
+- Stepper optimistic-timeout snapshot race — `entity.targetTemperature` captured at LaunchedEffect launch, not after 5s delay; successful echo arriving mid-delay rejected by stale snapshot. [EntityCard.kt StepperEntityCard]
+- Stepper reject path clears `optimisticTemp` unconditionally — second-tap optimistic value wiped if first call fails after second is in flight. [EntityCard.kt StepperEntityCard]
+- `appendStaleSuffix` future-timestamp / clock-skew → negative delta falls into `"just now"` branch (delta < 60_000 covers negatives). Pre-existing from Story 4.3.
+- `appendStaleSuffix` very large deltas render as `"…1051200m ago"` (no hour/day bucketing). Pre-existing from Story 4.3.
+- `else` branch in `EntityCardBody` covers `Cover`/`InputSelect` via `ReadOnlyEntityCard` — proper variants deferred to future stories.
+- Future `HaEntity` sealed subtypes silently fall to `ReadOnlyEntityCard` via `else` — design pattern; revisit when extending sealed hierarchy.
