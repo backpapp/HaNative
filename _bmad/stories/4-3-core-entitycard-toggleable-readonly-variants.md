@@ -2,6 +2,14 @@
 
 Status: done
 
+> **⚠ SUPERSEDED — Architectural prescription in this spec is OBSOLETE.**
+>
+> The story body below (notably AC5, AC10, Task 2.3, Task 6.3, Dev Notes "No ViewModel for individual cards") prescribes a self-subscribing composable with `koinInject<ObserveEntityStateUseCase>()` + `koinInject<CallServiceUseCase>()` directly inside `@Composable`. This was refactored on **2026-05-01** to comply with the project-wide Compose UI Boundary (architecture.md § Compose UI Boundary, epics AR14, `ui/PackageInfo.kt`).
+>
+> **Current architecture:** `EntityCard` consumes a per-instance `EntityCardViewModel` (Koin parameterized factory keyed by `entityId`) which exposes `state: StateFlow<EntityCardUiState>`. Composable + previews reference UIModel only — no `HaEntity` or `koinInject<UseCase>()` in the Compose tree. See the final Change Log entry below for the refactor scope.
+>
+> Read the body for *behavioural* contract (touch-down haptic, optimistic UI, snap-back, stale handling, a11y) — but ignore wiring prescriptions. The reference for new components is **EntityPicker (Story 4.5)** + the post-refactor EntityCard sources.
+
 ## Story
 
 As a power user,

@@ -335,6 +335,8 @@ sealed class ContextAction {
 - Never access WebSocket events above repository layer
 - Always use `{Feature}UiState` sealed class — no ad-hoc `isLoading: Boolean`
 - Always use HA entity domain strings verbatim in code
+- Never call `org.koin.compose.koinInject<UseCase>()` inside a `@Composable`. Composables consume `ViewModel` (resolved via `org.koin.compose.viewmodel.koinViewModel()`) or accept a pre-mapped UIModel + lambdas
+- Never accept `com.backpapp.hanative.domain.*` types (`HaEntity`, `Dashboard`, `DashboardCard`, etc.) as `@Composable` parameters or import them in composable / preview files. Map domain → `*UiState` in the ViewModel. See § Compose UI Boundary for full rule + lint grep
 
 ---
 

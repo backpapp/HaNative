@@ -124,6 +124,7 @@ Architecture-derived technical requirements affecting implementation:
 - AR11: Widget surfaces are platform-specific — Glance in `:androidApp`, WidgetKit in `:iosApp`; NOT in `:shared`; CMP does not cover widget surfaces
 - AR12: iOS `Info.plist` requires `NSLocalNetworkUsageDescription` + `NSBonjourServices` (`_home-assistant._tcp`, `_hass-mobile-app._tcp`) for LAN WebSocket — mandatory before iOS build
 - AR13: `ContextRule.sq` schema must be designed before Growth context engine story is assigned (currently undefined — Growth blocker)
+- AR14: Compose UI Boundary — composables consume only `ViewModel` (resolved via `org.koin.compose.viewmodel.koinViewModel()`) or pre-mapped `*UiState` UIModel + lambdas. `org.koin.compose.koinInject<UseCase>()` inside `@Composable` is forbidden; domain types (`HaEntity`, `Dashboard`, `DashboardCard`, etc.) MUST NOT appear as `@Composable` parameters or imports in composable / preview files. ViewModel maps domain → UIModel. Per-instance VMs use Koin parameterized factory (`viewModel { (id: String) -> ... }`) + `koinViewModel(key = id) { parametersOf(id) }`. Reference: `EntityPicker` (Story 4.5) + `EntityCard` (refactored 2026-05-01). See `architecture.md` § Compose UI Boundary for lint grep + file-naming convention.
 
 ### UX Design Requirements
 
