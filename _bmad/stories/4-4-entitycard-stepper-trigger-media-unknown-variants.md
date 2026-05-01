@@ -323,6 +323,7 @@ claude-opus-4-7 (bmad-dev-story)
 - 2026-05-01 — Story 4.4 created via `bmad-create-story`. Status: ready-for-dev.
 - 2026-05-01 — Story 4.4 implemented via `bmad-dev-story`. Stepper/Trigger/Media/Unknown variants added inside `EntityCard.kt`. Status: review.
 - 2026-05-01 — Story 4.4 BMAD code review complete. 3 decisions resolved (clamp, failure shake, reactive stale), 12 patches applied: stepper min/max clamping with HA `target_temp_step`; failure shake on Trigger + Media; `rememberStaleSuffix` ticker; `formatTemp` frac=10 / sign-loss fixes; UNINTERACTABLE_STATES on Trigger/Media; trigger duplicate Role.Button removed; mediaTitle blank check; Media + Unknown title `maxLines = 1, overflow = Ellipsis`; stepper IconButton a11y consolidated; stepper Animatable initial reset; stepper a11y "target" wording when targetTemperature null. 8 deferred (subtle stepper races + `else`-branch fallback). All tests pass; iOS link green. Status: done.
+- 2026-05-01 — Stepper / Trigger / Media / Unknown variants refactored alongside Story 4.3 to strict ViewModel + UIModel boundary (see `_bmad/outputs/architecture.md` § Compose UI Boundary). Variant dispatch moved out of Composables into `EntityCardViewModel.derive()`; bodies now consume `EntityCardUiState.{Stepper,Trigger,Media,Unknown}` only. Previews rewritten to construct UI states directly — no `HaEntity` imports.
 
 ### Review Findings
 

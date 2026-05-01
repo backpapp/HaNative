@@ -733,3 +733,31 @@ WidgetKit extension runs in separate process; cannot access main app's Kotlin We
 - HA entity domain strings verbatim (`light`, `switch`, etc.)
 - Never hand-author `HaNativeDatabase.kt` — SQLDelight generates it from `.sq` files
 - Wire `kotlinx.datetime` adapter in `EntityDomainAdapter.kt` explicitly
+
+## Compose UI Boundary
+
+Strict **Composable → ViewModel → UseCase** layering. Reference implementation: `EntityPicker` (Story 4.5) + `EntityCard` (refactored 2026-05-01).
+
+**Rules — every screen and component in `shared/src/commonMain/kotlin/com/backpapp/hanative/ui/`:**
+
+1. **No use case calls from Composables.** Composables consume a `ViewModel` via `org.koin.compose.viewmodel.koinViewModel()` (or accept a pre-mapped UIModel + lambdas). `org.koin.compose.koinInject<SomeUseCase>()` is forbidden inside `@Composable`.
+2. **No domain types in the Compose tree.** Composables never import from `com.backpapp.hanative.domain.model.*` (`HaEntity`, `Dashboard`, `DashboardCard`, etc.) and never take parameters typed as those classes. The ViewModel maps domain → a UI-layer `*Ui` data class colocated with the screen/component. Pass primitives (`String`, `Int`, `ImageVector`, `kotlin.time.Instant`) and UIModels.
+3. **State shape:** `ViewModel.state: StateFlow<{Feature}UiState>` — sealed class for screen states, data class for simple value-bag states. Compose collects via `androidx.lifecycle.compose.collectAsStateWithLifecycle()`.
+4. **Reusable leaf composables** that need to be host-agnostic still take UIModel + callbacks — never domain types.
+5. **Previews** (`shared/src/androidMain/kotlin/com/backpapp/hanative/ui/components/*Previews.kt`) drive bodies via UIModel/UiState directly. Preview files MUST NOT import `com.backpapp.hanative.domain.*`.
+6. **Per-entity factory ViewModels** register with Koin's parameterized factory:
+   ```kotlin
+   viewModel { (entityId: String) -> EntityCardViewModel(entityId, get(), get()) }
+   ```
+   Composable resolves with `koinViewModel(key = entityId) { parametersOf(entityId) }` — `key` ensures one VM instance per item in a `LazyColumn`.
+
+**File naming:** `{Feature}.kt` (Composable), `{Feature}UiModels.kt` (sealed `*UiState` + `*Intent`), `{Feature}ViewModel.kt`, `{Feature}Previews.kt` (androidMain), `{Feature}ViewModelTest.kt` (commonTest).
+
+**Lint check (must return zero hits):**
+```bash
+grep -rn "koinInject<\|import com.backpapp.hanative.domain" \
+  shared/src/commonMain/kotlin/com/backpapp/hanative/ui/ \
+  shared/src/androidMain/kotlin/com/backpapp/hanative/ui/ \
+  | grep -v "ViewModel.kt\|UiModels.kt\|Mapper.kt"
+```
+`*ViewModel.kt`, `*UiModels.kt`, `*Mapper.kt` are the only files allowed to import domain.

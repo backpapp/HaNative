@@ -8,9 +8,12 @@
 //       }
 //   }
 //
-// Each EntityCard subscribes to its own entity slice via
-// ObserveEntityStateUseCase, so a single entity update only recomposes
-// its own card.
+// Each EntityCard binds to its own EntityCardViewModel (parameterised on entityId
+// via Koin), so a single entity update only recomposes its own card.
+//
+// Architecture: strict Composable → ViewModel → UseCase. UI consumes only
+// `EntityCardUiState` + `EntityCardIntent` (UI-layer models). Domain types
+// (`HaEntity`) live behind the ViewModel boundary.
 
 package com.backpapp.hanative.ui.components
 
@@ -32,18 +35,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.HelpOutline
-import androidx.compose.material.icons.outlined.Lightbulb
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.PlayCircle
-import androidx.compose.material.icons.outlined.RadioButtonChecked
 import androidx.compose.material.icons.outlined.Remove
-import androidx.compose.material.icons.outlined.Sensors
-import androidx.compose.material.icons.outlined.Thermostat
-import androidx.compose.material.icons.outlined.ToggleOn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,19 +46,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -76,29 +64,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.backpapp.hanative.domain.model.HaEntity
-import com.backpapp.hanative.domain.usecase.CallServiceUseCase
-import com.backpapp.hanative.domain.usecase.ObserveEntityStateUseCase
-import com.backpapp.hanative.platform.HapticPattern
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.backpapp.hanative.platform.LocalHapticEngine
 import com.backpapp.hanative.ui.theme.Motion
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
-import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
-private const val OPTIMISTIC_TIMEOUT_MS = 5_000L
 private const val NUDGE_DP = -8
-private const val STEPPER_DELTA_C = 0.5
 private const val TRIGGER_PULSE_PEAK = 1.04f
-
-private val UNINTERACTABLE_STATES = setOf("unavailable", "unknown")
-
-enum class EntityCardSize { Standard, Compact }
-
-enum class EntityCardPreviewState { Default, Active, Stale, Optimistic, Error }
 
 @Composable
 fun EntityCard(
@@ -106,138 +83,81 @@ fun EntityCard(
     modifier: Modifier = Modifier,
     size: EntityCardSize = EntityCardSize.Standard,
     isStale: Boolean = false,
+    viewModel: EntityCardViewModel = koinViewModel(key = entityId) { parametersOf(entityId) },
 ) {
-    val observe: ObserveEntityStateUseCase = koinInject()
-    val call: CallServiceUseCase = koinInject()
-
-    val flow = remember(entityId) { observe(entityId) }
-    val entity by flow.collectAsState(initial = null)
-
+    LaunchedEffect(viewModel, isStale) { viewModel.setStale(isStale) }
+    val haptic = LocalHapticEngine.current
+    LaunchedEffect(viewModel) {
+        viewModel.haptics.collect { haptic.fire(it) }
+    }
+    val state by viewModel.state.collectAsStateWithLifecycle()
     EntityCardBody(
-        entityId = entityId,
-        entity = entity,
-        size = size,
-        isStale = isStale,
-        modifier = modifier,
-        call = call,
-        onToggle = { _ ->
-            // homeassistant.toggle works for light/switch/input_boolean
-            call("homeassistant", "toggle", entityId)
+        state = state,
+        onIntent = { intent ->
+            when (intent) {
+                EntityCardIntent.Toggle -> viewModel.onToggle()
+                is EntityCardIntent.StepTemp -> viewModel.onStepTemp(intent.direction)
+                EntityCardIntent.Trigger -> viewModel.onTrigger()
+                EntityCardIntent.PlayPause -> viewModel.onPlayPause()
+            }
         },
+        size = size,
+        modifier = modifier,
     )
 }
 
+// Koin-free body — previews + tests drive this directly with a UI state.
+// Composables here consume only UI-layer types (`EntityCardUiState`,
+// `EntityCardIntent`) — no domain models.
 @Composable
 internal fun EntityCardBody(
-    entityId: String,
-    entity: HaEntity?,
+    state: EntityCardUiState,
+    onIntent: (EntityCardIntent) -> Unit,
     size: EntityCardSize,
-    isStale: Boolean,
     modifier: Modifier = Modifier,
-    onToggle: suspend (nextOn: Boolean) -> Result<Unit> = { Result.success(Unit) },
-    call: CallServiceUseCase? = null,
-    forcedOptimisticOn: Boolean? = null,
-    forcedOptimisticTemp: Double? = null,
-    forcedRejected: Boolean = false,
-    forcedTriggerPulse: Boolean = false,
 ) {
-    when (entity) {
-        is HaEntity.Light, is HaEntity.Switch, is HaEntity.InputBoolean ->
-            ToggleableEntityCard(
-                entityId = entityId,
-                entity = entity,
-                size = size,
-                isStale = isStale,
-                onToggle = onToggle,
-                forcedOptimisticOn = forcedOptimisticOn,
-                forcedRejected = forcedRejected,
-                modifier = modifier,
-            )
-        is HaEntity.Climate ->
-            StepperEntityCard(
-                entity = entity,
-                size = size,
-                isStale = isStale,
-                call = call,
-                forcedOptimisticTemp = forcedOptimisticTemp,
-                forcedRejected = forcedRejected,
-                modifier = modifier,
-            )
-        is HaEntity.Script, is HaEntity.Scene ->
-            TriggerEntityCard(
-                entity = entity,
-                size = size,
-                isStale = isStale,
-                call = call,
-                forcedTriggerPulse = forcedTriggerPulse,
-                modifier = modifier,
-            )
-        is HaEntity.MediaPlayer ->
-            MediaEntityCard(
-                entity = entity,
-                size = size,
-                isStale = isStale,
-                call = call,
-                modifier = modifier,
-            )
-        is HaEntity.Unknown ->
-            UnknownEntityCard(
-                entity = entity,
-                size = size,
-                isStale = isStale,
-                modifier = modifier,
-            )
-        is HaEntity.Sensor, is HaEntity.BinarySensor, null ->
-            ReadOnlyEntityCard(
-                entityId = entityId,
-                entity = entity,
-                size = size,
-                isStale = isStale,
-                modifier = modifier,
-            )
-        else ->
-            // Unsupported subtypes (Cover/InputSelect) fall back to read-only render in this story.
-            ReadOnlyEntityCard(
-                entityId = entityId,
-                entity = entity,
-                size = size,
-                isStale = isStale,
-                modifier = modifier,
-            )
+    when (state) {
+        is EntityCardUiState.Toggle ->
+            ToggleableEntityCard(state = state, size = size, onIntent = onIntent, modifier = modifier)
+        is EntityCardUiState.Stepper ->
+            StepperEntityCard(state = state, size = size, onIntent = onIntent, modifier = modifier)
+        is EntityCardUiState.Trigger ->
+            TriggerEntityCard(state = state, size = size, onIntent = onIntent, modifier = modifier)
+        is EntityCardUiState.Media ->
+            MediaEntityCard(state = state, size = size, onIntent = onIntent, modifier = modifier)
+        is EntityCardUiState.Unknown ->
+            UnknownEntityCard(state = state, size = size, modifier = modifier)
+        is EntityCardUiState.ReadOnly ->
+            ReadOnlyEntityCard(state = state, size = size, modifier = modifier)
     }
 }
 
 @Composable
 private fun ReadOnlyEntityCard(
-    entityId: String,
-    entity: HaEntity?,
+    state: EntityCardUiState.ReadOnly,
     size: EntityCardSize,
-    isStale: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val name = friendlyName(entity, entityId)
-    val unit = (entity as? HaEntity.Sensor)?.unit
-    val baseLabel = stateLabel(entity?.state ?: "unknown") + if (!unit.isNullOrBlank()) " $unit" else ""
-    val label = rememberStaleSuffix(baseLabel, isStale, entity?.lastChanged)
-    val contentDesc = rememberStaleSuffix("$name, $baseLabel", isStale, entity?.lastChanged)
+    val label = rememberStaleSuffix(state.label, state.isStale, state.lastChanged)
+    val contentDesc = rememberStaleSuffix("${state.title}, ${state.label}", state.isStale, state.lastChanged)
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = if (size == EntityCardSize.Standard) 72.dp else 56.dp)
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .alpha(if (isStale) 0.5f else 1f)
+            .alpha(if (state.isStale) 0.5f else 1f)
             .semantics { contentDescription = contentDesc },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
-            imageVector = domainIcon(entity),
+            imageVector = state.icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(Modifier.weight(1f)) {
-            Text(name, style = MaterialTheme.typography.bodyLarge)
+            Text(state.title, style = MaterialTheme.typography.bodyLarge)
             // BinarySensor humanisation (e.g. "Detected"/"Clear") deferred — On/Off acceptable for MVP.
             Text(
                 label,
@@ -250,88 +170,43 @@ private fun ReadOnlyEntityCard(
 
 @Composable
 private fun ToggleableEntityCard(
-    entityId: String,
-    entity: HaEntity?,
+    state: EntityCardUiState.Toggle,
     size: EntityCardSize,
-    isStale: Boolean,
-    onToggle: suspend (nextOn: Boolean) -> Result<Unit>,
-    forcedOptimisticOn: Boolean?,
-    forcedRejected: Boolean,
+    onIntent: (EntityCardIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val haptic = LocalHapticEngine.current
-    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
-    var optimisticOn: Boolean? by remember(entityId) { mutableStateOf(forcedOptimisticOn) }
-    var rejectTrigger by remember(entityId) { mutableLongStateOf(if (forcedRejected) 1L else 0L) }
+    val labelBase = stateLabel(if (state.isOn) "on" else "off")
+    val contentDesc = rememberStaleSuffix("${state.title}, $labelBase", state.isStale, state.lastChanged)
+    val shownLabel = rememberStaleSuffix(labelBase, state.isStale, state.lastChanged)
+    val stateDesc = if (state.isOn) "on" else "off"
 
-    val realOn = entity?.state == "on"
-    val displayedOn = optimisticOn ?: realOn
+    // Mirrors Motion.entityStateChange (TweenSpec<Float>) re-typed for Color.
+    val bg by animateColorAsState(
+        targetValue = if (state.isOn) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+    )
 
-    val isInteractable = entity != null && entity.state !in UNINTERACTABLE_STATES
-
-    // Reconciliation: clear optimistic when WebSocket echoes the expected state.
-    LaunchedEffect(entity?.state, optimisticOn) {
-        val o = optimisticOn
-        if (o != null && entity != null && (entity.state == "on") == o) {
-            optimisticOn = null
-        }
-    }
-
-    // Optimistic timeout — treat as rejection if echo never lands.
-    LaunchedEffect(optimisticOn) {
-        val o = optimisticOn ?: return@LaunchedEffect
-        delay(OPTIMISTIC_TIMEOUT_MS)
-        if (optimisticOn == o && (entity?.state == "on") != o) {
-            haptic.fire(HapticPattern.ActionRejected)
-            rejectTrigger += 1L
-            optimisticOn = null
-        }
-    }
-
-    // Snap-back animation: nudge -8dp then return to 0.
     val nudgePx = with(density) { NUDGE_DP.dp.toPx() }
-    val nudge = remember(entityId) { Animatable(if (forcedRejected) nudgePx else 0f) }
-    LaunchedEffect(rejectTrigger) {
-        if (rejectTrigger > 0L) {
+    val nudge = remember(state.entityId) { Animatable(0f) }
+    LaunchedEffect(state.rejectionCounter) {
+        if (state.rejectionCounter > 0L) {
             nudge.snapTo(0f)
             nudge.animateTo(nudgePx, Motion.snapBackRejection)
             nudge.animateTo(0f, Motion.snapBackRejection)
         }
     }
 
-    val name = friendlyName(entity, entityId)
-    val label = stateLabel(if (displayedOn) "on" else "off")
-    val contentDesc = rememberStaleSuffix("$name, $label", isStale, entity?.lastChanged)
-    val shownLabel = rememberStaleSuffix(label, isStale, entity?.lastChanged)
-    val stateDesc = if (displayedOn) "on" else "off"
+    val interactionSource = remember(state.entityId) { MutableInteractionSource() }
 
-    // Mirrors Motion.entityStateChange (TweenSpec<Float>) re-typed for Color.
-    val bg by animateColorAsState(
-        targetValue = if (displayedOn) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
-    )
-
-    val interactionSource = remember(entityId) { MutableInteractionSource() }
-
-    // Touch-down haptic + optimistic + service. Fires on physical PressInteraction.Press
-    // (touch-down) BEFORE toggleable's release-based onValueChange. Debounces re-presses
-    // while an optimistic update is already in flight.
-    LaunchedEffect(interactionSource, isInteractable) {
+    // Touch-down dispatch fires on physical PressInteraction.Press BEFORE toggleable's
+    // release-based onValueChange. VM debounces re-presses internally while optimistic
+    // is in flight.
+    LaunchedEffect(interactionSource, state.isInteractable) {
         interactionSource.interactions.collect { interaction ->
-            if (interaction is PressInteraction.Press &&
-                isInteractable &&
-                optimisticOn == null
-            ) {
-                triggerToggle(
-                    nextOn = !displayedOn,
-                    haptic = haptic,
-                    scope = scope,
-                    onToggle = onToggle,
-                    setOptimistic = { optimisticOn = it },
-                    onRejected = { rejectTrigger += 1L },
-                )
+            if (interaction is PressInteraction.Press && state.isInteractable) {
+                onIntent(EntityCardIntent.Toggle)
             }
         }
     }
@@ -343,15 +218,15 @@ private fun ToggleableEntityCard(
             .background(bg, MaterialTheme.shapes.medium)
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .graphicsLayer { translationX = nudge.value }
-            .alpha(if (isStale) 0.5f else 1f)
+            .alpha(if (state.isStale) 0.5f else 1f)
             .semantics {
                 contentDescription = contentDesc
                 role = Role.Switch
                 stateDescription = stateDesc
             }
             .toggleable(
-                value = displayedOn,
-                enabled = isInteractable,
+                value = state.isOn,
+                enabled = state.isInteractable,
                 role = Role.Switch,
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
@@ -359,28 +234,19 @@ private fun ToggleableEntityCard(
                     // Release-based path. Touch-down handler above already fired for physical
                     // presses; this branch covers a11y synthetic clicks (TalkBack double-tap,
                     // keyboard Enter, Switch Access) where PressInteraction may not arrive.
-                    if (optimisticOn == null) {
-                        triggerToggle(
-                            nextOn = !displayedOn,
-                            haptic = haptic,
-                            scope = scope,
-                            onToggle = onToggle,
-                            setOptimistic = { optimisticOn = it },
-                            onRejected = { rejectTrigger += 1L },
-                        )
-                    }
+                    onIntent(EntityCardIntent.Toggle)
                 },
             ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
-            imageVector = domainIcon(entity),
+            imageVector = state.icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(Modifier.weight(1f)) {
-            Text(name, style = MaterialTheme.typography.bodyLarge)
+            Text(state.title, style = MaterialTheme.typography.bodyLarge)
             Text(
                 shownLabel,
                 style = MaterialTheme.typography.bodyMedium,
@@ -388,7 +254,7 @@ private fun ToggleableEntityCard(
             )
         }
         Switch(
-            checked = displayedOn,
+            checked = state.isOn,
             onCheckedChange = null,
             modifier = Modifier
                 .minimumInteractiveComponentSize()
@@ -399,109 +265,30 @@ private fun ToggleableEntityCard(
 
 @Composable
 private fun StepperEntityCard(
-    entity: HaEntity.Climate,
+    state: EntityCardUiState.Stepper,
     size: EntityCardSize,
-    isStale: Boolean,
-    call: CallServiceUseCase?,
-    forcedOptimisticTemp: Double?,
-    forcedRejected: Boolean,
+    onIntent: (EntityCardIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val haptic = LocalHapticEngine.current
-    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
-    var optimisticTemp: Double? by remember(entity.entityId) { mutableStateOf(forcedOptimisticTemp) }
-    var rejectTrigger by remember(entity.entityId) { mutableLongStateOf(if (forcedRejected) 1L else 0L) }
-
-    val displayedTemp: Double =
-        optimisticTemp ?: entity.targetTemperature ?: entity.currentTemperature ?: 0.0
-    val formatted = formatTemp(displayedTemp)
-
-    val disabled = entity.state in UNINTERACTABLE_STATES
-
-    // HA-reported climate bounds — clamp +/- to these to avoid sending out-of-range
-    // set_temperature calls. target_temp_step overrides STEPPER_DELTA_C when present.
-    val minTemp = (entity.attributes["min_temp"] as? Number)?.toDouble()
-    val maxTemp = (entity.attributes["max_temp"] as? Number)?.toDouble()
-    val tempStep = (entity.attributes["target_temp_step"] as? Number)?.toDouble() ?: STEPPER_DELTA_C
-
-    // Reconcile: clear optimistic once HA echoes our target.
-    LaunchedEffect(entity.targetTemperature) {
-        val opt = optimisticTemp
-        val target = entity.targetTemperature
-        if (opt != null && target != null && abs(target - opt) <= 0.01) {
-            optimisticTemp = null
-        }
-    }
-
-    // Optimistic timeout.
-    LaunchedEffect(optimisticTemp) {
-        val o = optimisticTemp ?: return@LaunchedEffect
-        delay(OPTIMISTIC_TIMEOUT_MS)
-        val target = entity.targetTemperature ?: 0.0
-        if (optimisticTemp == o && abs(target - o) > 0.01) {
-            haptic.fire(HapticPattern.ActionRejected)
-            rejectTrigger += 1L
-            optimisticTemp = null
-        }
-    }
-
-    // Snap-back nudge — start at rest; LaunchedEffect drives the animation when
-    // rejectTrigger increments (incl. forced previews where rejectTrigger starts at 1L).
     val nudgePx = with(density) { NUDGE_DP.dp.toPx() }
-    val nudge = remember(entity.entityId) { Animatable(0f) }
-    LaunchedEffect(rejectTrigger) {
-        if (rejectTrigger > 0L) {
+    val nudge = remember(state.entityId) { Animatable(0f) }
+    LaunchedEffect(state.rejectionCounter) {
+        if (state.rejectionCounter > 0L) {
             nudge.snapTo(0f)
             nudge.animateTo(nudgePx, Motion.snapBackRejection)
             nudge.animateTo(0f, Motion.snapBackRejection)
         }
     }
 
-    fun step(direction: Int, pattern: HapticPattern) {
-        if (disabled || call == null) return
-        val raw = displayedTemp + direction * tempStep
-        val clamped = when {
-            minTemp != null && maxTemp != null -> raw.coerceIn(minTemp, maxTemp)
-            minTemp != null -> raw.coerceAtLeast(minTemp)
-            maxTemp != null -> raw.coerceAtMost(maxTemp)
-            else -> raw
-        }
-        // Already at bound — reject without firing service call.
-        if (abs(clamped - displayedTemp) < 0.001) {
-            haptic.fire(HapticPattern.ActionRejected)
-            rejectTrigger += 1L
-            return
-        }
-        haptic.fire(pattern)
-        optimisticTemp = clamped
-        scope.launch {
-            // Heat-cool dual-setpoint deferred to Story 4.4.x or later.
-            val result = call("climate", "set_temperature", entity.entityId, mapOf("temperature" to clamped))
-            if (result.isFailure) {
-                haptic.fire(HapticPattern.ActionRejected)
-                rejectTrigger += 1L
-                optimisticTemp = null
-            }
-        }
-    }
-
-    val name = friendlyName(entity, entity.entityId)
-    val currentLabel = entity.currentTemperature?.let { "Current ${formatTemp(it)}" } ?: stateLabel(entity.state)
-    // Spec wording: when no target reported (e.g. mode "off"), avoid "target X" framing
-    // since the displayed value is the current temp or 0.0 fallback rather than a setpoint.
-    val tempDescriptor = if (entity.targetTemperature != null || optimisticTemp != null) {
-        "target $formatted"
-    } else {
-        formatted
-    }
+    val tempDescriptor = if (state.hasTarget) "target ${state.formattedTemp}" else state.formattedTemp
     val rowContentDesc = rememberStaleSuffix(
-        "$name, $currentLabel, $tempDescriptor",
-        isStale,
-        entity.lastChanged,
+        "${state.title}, ${state.currentLabel}, $tempDescriptor",
+        state.isStale,
+        state.lastChanged,
     )
-    val shownSubtitle = rememberStaleSuffix(currentLabel, isStale, entity.lastChanged)
+    val shownSubtitle = rememberStaleSuffix(state.currentLabel, state.isStale, state.lastChanged)
 
     Row(
         modifier = modifier
@@ -509,18 +296,18 @@ private fun StepperEntityCard(
             .heightIn(min = if (size == EntityCardSize.Standard) 72.dp else 56.dp)
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .graphicsLayer { translationX = nudge.value }
-            .alpha(if (isStale) 0.5f else 1f)
+            .alpha(if (state.isStale) 0.5f else 1f)
             .semantics { contentDescription = rowContentDesc },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
-            imageVector = domainIcon(entity),
+            imageVector = state.icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(Modifier.weight(1f)) {
-            Text(name, style = MaterialTheme.typography.bodyLarge)
+            Text(state.title, style = MaterialTheme.typography.bodyLarge)
             Text(
                 shownSubtitle,
                 style = MaterialTheme.typography.bodyMedium,
@@ -528,8 +315,8 @@ private fun StepperEntityCard(
             )
         }
         IconButton(
-            onClick = { step(-1, HapticPattern.StepperDec) },
-            enabled = !disabled,
+            onClick = { onIntent(EntityCardIntent.StepTemp(-1)) },
+            enabled = state.isInteractable,
             modifier = Modifier
                 .minimumInteractiveComponentSize()
                 .semantics { contentDescription = "Decrease temperature" },
@@ -537,14 +324,14 @@ private fun StepperEntityCard(
             Icon(Icons.Outlined.Remove, contentDescription = null)
         }
         Text(
-            text = formatted,
+            text = state.formattedTemp,
             fontSize = 20.sp,
             fontWeight = FontWeight.W800,
             style = MaterialTheme.typography.titleLarge,
         )
         IconButton(
-            onClick = { step(1, HapticPattern.StepperInc) },
-            enabled = !disabled,
+            onClick = { onIntent(EntityCardIntent.StepTemp(1)) },
+            enabled = state.isInteractable,
             modifier = Modifier
                 .minimumInteractiveComponentSize()
                 .semantics { contentDescription = "Increase temperature" },
@@ -556,49 +343,34 @@ private fun StepperEntityCard(
 
 @Composable
 private fun TriggerEntityCard(
-    entity: HaEntity,
+    state: EntityCardUiState.Trigger,
     size: EntityCardSize,
-    isStale: Boolean,
-    call: CallServiceUseCase?,
-    forcedTriggerPulse: Boolean,
+    onIntent: (EntityCardIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val haptic = LocalHapticEngine.current
-    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
-    var triggerCounter by remember(entity.entityId) {
-        mutableLongStateOf(if (forcedTriggerPulse) 1L else 0L)
-    }
-    var rejectTrigger by remember(entity.entityId) { mutableLongStateOf(0L) }
-
-    val pulse = remember(entity.entityId) { Animatable(if (forcedTriggerPulse) TRIGGER_PULSE_PEAK else 1f) }
-    LaunchedEffect(triggerCounter) {
-        if (triggerCounter > 0L) {
+    val pulse = remember(state.entityId) { Animatable(1f) }
+    LaunchedEffect(state.triggerCounter) {
+        if (state.triggerCounter > 0L) {
             pulse.snapTo(1f)
             pulse.animateTo(TRIGGER_PULSE_PEAK, Motion.entityStateChange)
             pulse.animateTo(1f, Motion.entityStateChange)
         }
     }
 
-    // Failure shake — same -8dp snap-back as Stepper/Toggleable for visual consistency.
     val nudgePx = with(density) { NUDGE_DP.dp.toPx() }
-    val nudge = remember(entity.entityId) { Animatable(0f) }
-    LaunchedEffect(rejectTrigger) {
-        if (rejectTrigger > 0L) {
+    val nudge = remember(state.entityId) { Animatable(0f) }
+    LaunchedEffect(state.rejectionCounter) {
+        if (state.rejectionCounter > 0L) {
             nudge.snapTo(0f)
             nudge.animateTo(nudgePx, Motion.snapBackRejection)
             nudge.animateTo(0f, Motion.snapBackRejection)
         }
     }
 
-    val disabled = entity.state in UNINTERACTABLE_STATES
-    val domain = if (entity is HaEntity.Script) "script" else "scene"
-
-    val name = friendlyName(entity, entity.entityId)
-    val labelBase = stateLabel(entity.state)
-    val rowContentDesc = rememberStaleSuffix("$name, $labelBase", isStale, entity.lastChanged)
-    val shownSubtitle = rememberStaleSuffix(labelBase, isStale, entity.lastChanged)
+    val rowContentDesc = rememberStaleSuffix("${state.title}, ${state.subtitle}", state.isStale, state.lastChanged)
+    val shownSubtitle = rememberStaleSuffix(state.subtitle, state.isStale, state.lastChanged)
 
     Row(
         modifier = modifier
@@ -611,33 +383,21 @@ private fun TriggerEntityCard(
             }
             .clickable(
                 role = Role.Button,
-                enabled = !disabled,
-            ) {
-                if (call == null) return@clickable
-                haptic.fire(HapticPattern.ActionTriggered)
-                scope.launch {
-                    val result = call(domain, "turn_on", entity.entityId)
-                    if (result.isFailure) {
-                        haptic.fire(HapticPattern.ActionRejected)
-                        rejectTrigger += 1L
-                    } else {
-                        triggerCounter += 1L
-                    }
-                }
-            }
+                enabled = state.isInteractable,
+            ) { onIntent(EntityCardIntent.Trigger) }
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .alpha(if (isStale) 0.5f else 1f)
+            .alpha(if (state.isStale) 0.5f else 1f)
             .semantics { contentDescription = rowContentDesc },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
-            imageVector = domainIcon(entity),
+            imageVector = state.icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(Modifier.weight(1f)) {
-            Text(name, style = MaterialTheme.typography.bodyLarge)
+            Text(state.title, style = MaterialTheme.typography.bodyLarge)
             Text(
                 shownSubtitle,
                 style = MaterialTheme.typography.bodyMedium,
@@ -657,39 +417,25 @@ private fun TriggerEntityCard(
 
 @Composable
 private fun MediaEntityCard(
-    entity: HaEntity.MediaPlayer,
+    state: EntityCardUiState.Media,
     size: EntityCardSize,
-    isStale: Boolean,
-    call: CallServiceUseCase?,
+    onIntent: (EntityCardIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val haptic = LocalHapticEngine.current
-    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
-    val isPlaying = entity.state == "playing"
-    val disabled = entity.state in UNINTERACTABLE_STATES
-
-    var rejectTrigger by remember(entity.entityId) { mutableLongStateOf(0L) }
     val nudgePx = with(density) { NUDGE_DP.dp.toPx() }
-    val nudge = remember(entity.entityId) { Animatable(0f) }
-    LaunchedEffect(rejectTrigger) {
-        if (rejectTrigger > 0L) {
+    val nudge = remember(state.entityId) { Animatable(0f) }
+    LaunchedEffect(state.rejectionCounter) {
+        if (state.rejectionCounter > 0L) {
             nudge.snapTo(0f)
             nudge.animateTo(nudgePx, Motion.snapBackRejection)
             nudge.animateTo(0f, Motion.snapBackRejection)
         }
     }
 
-    // Treat blank media_title as null so an empty HA attribute doesn't leave the row title blank.
-    val title = entity.mediaTitle?.takeIf { it.isNotBlank() } ?: friendlyName(entity, entity.entityId)
-    val labelBase = when (entity.state) {
-        "playing" -> "Playing"
-        "paused" -> "Paused"
-        else -> stateLabel(entity.state)
-    }
-    val rowContentDesc = rememberStaleSuffix("$title, $labelBase", isStale, entity.lastChanged)
-    val shownSubtitle = rememberStaleSuffix(labelBase, isStale, entity.lastChanged)
+    val rowContentDesc = rememberStaleSuffix("${state.title}, ${state.subtitle}", state.isStale, state.lastChanged)
+    val shownSubtitle = rememberStaleSuffix(state.subtitle, state.isStale, state.lastChanged)
 
     Row(
         modifier = modifier
@@ -697,19 +443,19 @@ private fun MediaEntityCard(
             .heightIn(min = if (size == EntityCardSize.Standard) 72.dp else 56.dp)
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .graphicsLayer { translationX = nudge.value }
-            .alpha(if (isStale) 0.5f else 1f)
+            .alpha(if (state.isStale) 0.5f else 1f)
             .semantics { contentDescription = rowContentDesc },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
-            imageVector = domainIcon(entity),
+            imageVector = state.icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(Modifier.weight(1f)) {
             Text(
-                title,
+                state.title,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -723,23 +469,13 @@ private fun MediaEntityCard(
             )
         }
         IconButton(
-            onClick = {
-                if (call == null) return@IconButton
-                haptic.fire(HapticPattern.ActionTriggered)
-                scope.launch {
-                    val result = call("media_player", "media_play_pause", entity.entityId)
-                    if (result.isFailure) {
-                        haptic.fire(HapticPattern.ActionRejected)
-                        rejectTrigger += 1L
-                    }
-                }
-            },
-            enabled = !disabled,
+            onClick = { onIntent(EntityCardIntent.PlayPause) },
+            enabled = state.isInteractable,
             modifier = Modifier.minimumInteractiveComponentSize(),
         ) {
             Icon(
-                imageVector = if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
-                contentDescription = if (isPlaying) "Pause" else "Play",
+                imageVector = if (state.isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                contentDescription = if (state.isPlaying) "Pause" else "Play",
             )
         }
     }
@@ -747,34 +483,31 @@ private fun MediaEntityCard(
 
 @Composable
 private fun UnknownEntityCard(
-    entity: HaEntity.Unknown,
+    state: EntityCardUiState.Unknown,
     size: EntityCardSize,
-    isStale: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // Per AC5: NEVER index entity.attributes — render must not crash on any shape.
-    val labelBase = stateLabel(entity.state)
-    val rowContentDesc = rememberStaleSuffix("${entity.entityId}, $labelBase", isStale, entity.lastChanged)
-    val shownSubtitle = rememberStaleSuffix(labelBase, isStale, entity.lastChanged)
+    val rowContentDesc = rememberStaleSuffix("${state.title}, ${state.subtitle}", state.isStale, state.lastChanged)
+    val shownSubtitle = rememberStaleSuffix(state.subtitle, state.isStale, state.lastChanged)
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = if (size == EntityCardSize.Standard) 72.dp else 56.dp)
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .alpha(if (isStale) 0.5f else 1f)
+            .alpha(if (state.isStale) 0.5f else 1f)
             .semantics { contentDescription = rowContentDesc },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
-            imageVector = Icons.Outlined.HelpOutline,
+            imageVector = state.icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(Modifier.weight(1f)) {
             Text(
-                entity.entityId,
+                state.title,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -786,26 +519,6 @@ private fun UnknownEntityCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-    }
-}
-
-private fun triggerToggle(
-    nextOn: Boolean,
-    haptic: com.backpapp.hanative.platform.HapticEngine,
-    scope: kotlinx.coroutines.CoroutineScope,
-    onToggle: suspend (Boolean) -> Result<Unit>,
-    setOptimistic: (Boolean?) -> Unit,
-    onRejected: () -> Unit,
-) {
-    haptic.fire(if (nextOn) HapticPattern.ToggleOn else HapticPattern.ToggleOff)
-    setOptimistic(nextOn)
-    scope.launch {
-        val result = onToggle(nextOn)
-        if (result.isFailure) {
-            haptic.fire(HapticPattern.ActionRejected)
-            setOptimistic(null)
-            onRejected()
         }
     }
 }
@@ -853,32 +566,7 @@ internal fun formatTemp(value: Double): String {
     return "$sign$whole.$frac°"
 }
 
-internal fun friendlyName(entity: HaEntity?, fallbackId: String): String {
-    val attr = entity?.attributes?.get("friendly_name") as? String
-    if (!attr.isNullOrBlank()) return attr
-    val raw = entity?.entityId ?: fallbackId
-    val withoutDomain = raw.substringAfter('.', raw)
-    return withoutDomain
-        .split('_')
-        .filter { it.isNotEmpty() }
-        .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
-}
-
 internal fun stateLabel(state: String): String = when (state) {
     "" -> "Unknown"
     else -> state.replace('_', ' ').replaceFirstChar { it.uppercase() }
-}
-
-internal fun domainIcon(entity: HaEntity?): ImageVector = when (entity) {
-    is HaEntity.Light -> Icons.Outlined.Lightbulb
-    is HaEntity.Switch -> Icons.Outlined.ToggleOn
-    is HaEntity.InputBoolean -> Icons.Outlined.RadioButtonChecked
-    is HaEntity.Sensor -> Icons.Outlined.Sensors
-    is HaEntity.BinarySensor -> Icons.Outlined.Notifications
-    is HaEntity.Climate -> Icons.Outlined.Thermostat
-    is HaEntity.Script -> Icons.Outlined.PlayArrow
-    is HaEntity.Scene -> Icons.Outlined.AutoAwesome
-    is HaEntity.MediaPlayer -> Icons.Outlined.PlayCircle
-    is HaEntity.Unknown -> Icons.Outlined.HelpOutline
-    else -> Icons.Outlined.Sensors
 }

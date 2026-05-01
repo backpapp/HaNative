@@ -1,10 +1,17 @@
 package com.backpapp.hanative.ui.components
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material.icons.outlined.Sensors
+import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.tooling.preview.Preview
-import com.backpapp.hanative.domain.model.HaEntity
 import com.backpapp.hanative.platform.HapticEngine
 import com.backpapp.hanative.platform.HapticPattern
 import com.backpapp.hanative.platform.LocalHapticEngine
@@ -17,76 +24,6 @@ private object NoopHaptic : HapticEngine {
     override fun fire(pattern: HapticPattern) = Unit
 }
 
-private fun lightEntity(state: String, name: String = "Living Room"): HaEntity =
-    HaEntity.Light(
-        entityId = "light.living_room",
-        state = state,
-        attributes = mapOf("friendly_name" to name),
-        lastChanged = previewInstant,
-        lastUpdated = previewInstant,
-    )
-
-private fun sensorEntity(state: String = "21.4", unit: String = "°C", name: String = "Living Room Temp"): HaEntity =
-    HaEntity.Sensor(
-        entityId = "sensor.living_room_temp",
-        state = state,
-        attributes = mapOf("friendly_name" to name, "unit_of_measurement" to unit),
-        lastChanged = previewInstant,
-        lastUpdated = previewInstant,
-    )
-
-private fun climateEntity(
-    state: String = "heat",
-    target: Double? = 21.0,
-    current: Double? = 20.5,
-    name: String = "Lounge Climate",
-): HaEntity.Climate = HaEntity.Climate(
-    entityId = "climate.lounge",
-    state = state,
-    attributes = buildMap<String, Any?> {
-        put("friendly_name", name)
-        if (target != null) put("temperature", target)
-        if (current != null) put("current_temperature", current)
-    },
-    lastChanged = previewInstant,
-    lastUpdated = previewInstant,
-)
-
-private fun scriptEntity(state: String = "off", name: String = "Goodnight"): HaEntity.Script =
-    HaEntity.Script(
-        entityId = "script.goodnight",
-        state = state,
-        attributes = mapOf("friendly_name" to name),
-        lastChanged = previewInstant,
-        lastUpdated = previewInstant,
-    )
-
-private fun mediaEntity(
-    state: String = "playing",
-    title: String? = "Beethoven Symphony 9",
-    name: String = "Living Room Speaker",
-): HaEntity.MediaPlayer = HaEntity.MediaPlayer(
-    entityId = "media_player.living_room",
-    state = state,
-    attributes = buildMap<String, Any?> {
-        put("friendly_name", name)
-        if (title != null) put("media_title", title)
-    },
-    lastChanged = previewInstant,
-    lastUpdated = previewInstant,
-)
-
-private fun unknownEntity(state: String = "active"): HaEntity.Unknown =
-    HaEntity.Unknown(
-        entityId = "vacuum.upstairs",
-        state = state,
-        // Intentionally include a random attributes shape — Unknown variant must not index it.
-        attributes = mapOf("battery_level" to 42, "fan_speed" to "high"),
-        lastChanged = previewInstant,
-        lastUpdated = previewInstant,
-        domain = "vacuum",
-    )
-
 @Composable
 private fun PreviewWrap(content: @Composable () -> Unit) {
     HaNativeTheme {
@@ -96,16 +33,109 @@ private fun PreviewWrap(content: @Composable () -> Unit) {
     }
 }
 
+private fun toggleState(
+    isOn: Boolean,
+    isStale: Boolean = false,
+    rejectionCounter: Long = 0L,
+    isInteractable: Boolean = true,
+) = EntityCardUiState.Toggle(
+    entityId = "light.living_room",
+    title = "Living Room",
+    icon = Icons.Outlined.Lightbulb,
+    isStale = isStale,
+    lastChanged = previewInstant,
+    rejectionCounter = rejectionCounter,
+    isOn = isOn,
+    isInteractable = isInteractable,
+)
+
+private fun readOnlyState(
+    title: String = "Living Room Temp",
+    label: String = "21.4 °C",
+    isStale: Boolean = false,
+) = EntityCardUiState.ReadOnly(
+    entityId = "sensor.living_room_temp",
+    title = title,
+    icon = Icons.Outlined.Sensors,
+    isStale = isStale,
+    lastChanged = previewInstant,
+    label = label,
+)
+
+private fun stepperState(
+    currentLabel: String = "Current 20.5°",
+    formattedTemp: String = "21.0°",
+    hasTarget: Boolean = true,
+    isStale: Boolean = false,
+    rejectionCounter: Long = 0L,
+    isInteractable: Boolean = true,
+) = EntityCardUiState.Stepper(
+    entityId = "climate.lounge",
+    title = "Lounge Climate",
+    icon = Icons.Outlined.Thermostat,
+    isStale = isStale,
+    lastChanged = previewInstant,
+    rejectionCounter = rejectionCounter,
+    currentLabel = currentLabel,
+    formattedTemp = formattedTemp,
+    hasTarget = hasTarget,
+    isInteractable = isInteractable,
+)
+
+private fun triggerState(
+    subtitle: String = "Off",
+    triggerCounter: Long = 0L,
+    isStale: Boolean = false,
+    isInteractable: Boolean = true,
+) = EntityCardUiState.Trigger(
+    entityId = "script.goodnight",
+    title = "Goodnight",
+    icon = Icons.Outlined.PlayArrow,
+    isStale = isStale,
+    lastChanged = previewInstant,
+    subtitle = subtitle,
+    triggerCounter = triggerCounter,
+    isInteractable = isInteractable,
+)
+
+private fun mediaState(
+    title: String = "Beethoven Symphony 9",
+    subtitle: String = "Playing",
+    isPlaying: Boolean = true,
+    isStale: Boolean = false,
+    isInteractable: Boolean = true,
+) = EntityCardUiState.Media(
+    entityId = "media_player.living_room",
+    title = title,
+    icon = Icons.Outlined.PlayCircle,
+    isStale = isStale,
+    lastChanged = previewInstant,
+    subtitle = subtitle,
+    isPlaying = isPlaying,
+    isInteractable = isInteractable,
+)
+
+private fun unknownState(
+    subtitle: String = "Active",
+    isStale: Boolean = false,
+) = EntityCardUiState.Unknown(
+    entityId = "vacuum.upstairs",
+    title = "vacuum.upstairs",
+    icon = Icons.Outlined.HelpOutline,
+    isStale = isStale,
+    lastChanged = previewInstant,
+    subtitle = subtitle,
+)
+
 // ----- Toggleable -----
 
 @Preview(name = "Toggleable_Default")
 @Composable
 private fun ToggleableDefault() = PreviewWrap {
     EntityCardBody(
-        entityId = "light.living_room",
-        entity = lightEntity(state = "off"),
+        state = toggleState(isOn = false),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -113,10 +143,9 @@ private fun ToggleableDefault() = PreviewWrap {
 @Composable
 private fun ToggleableActive() = PreviewWrap {
     EntityCardBody(
-        entityId = "light.living_room",
-        entity = lightEntity(state = "on"),
+        state = toggleState(isOn = true),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -124,22 +153,20 @@ private fun ToggleableActive() = PreviewWrap {
 @Composable
 private fun ToggleableStale() = PreviewWrap {
     EntityCardBody(
-        entityId = "light.living_room",
-        entity = lightEntity(state = "on"),
+        state = toggleState(isOn = true, isStale = true),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = true,
     )
 }
 
+// Optimistic = real state inverted while in flight; previewed by toggling isOn.
 @Preview(name = "Toggleable_Optimistic")
 @Composable
 private fun ToggleableOptimistic() = PreviewWrap {
     EntityCardBody(
-        entityId = "light.living_room",
-        entity = lightEntity(state = "off"),
+        state = toggleState(isOn = true),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
-        forcedOptimisticOn = true,
     )
 }
 
@@ -147,11 +174,9 @@ private fun ToggleableOptimistic() = PreviewWrap {
 @Composable
 private fun ToggleableError() = PreviewWrap {
     EntityCardBody(
-        entityId = "light.living_room",
-        entity = lightEntity(state = "off"),
+        state = toggleState(isOn = false, rejectionCounter = 1L),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
-        forcedRejected = true,
     )
 }
 
@@ -161,10 +186,9 @@ private fun ToggleableError() = PreviewWrap {
 @Composable
 private fun ReadOnlyDefault() = PreviewWrap {
     EntityCardBody(
-        entityId = "sensor.living_room_temp",
-        entity = sensorEntity(),
+        state = readOnlyState(),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -172,16 +196,16 @@ private fun ReadOnlyDefault() = PreviewWrap {
 @Composable
 private fun ReadOnlyActive() = PreviewWrap {
     EntityCardBody(
-        entityId = "binary_sensor.front_door",
-        entity = HaEntity.BinarySensor(
+        state = EntityCardUiState.ReadOnly(
             entityId = "binary_sensor.front_door",
-            state = "on",
-            attributes = mapOf("friendly_name" to "Front Door"),
+            title = "Front Door",
+            icon = Icons.Outlined.Notifications,
+            isStale = false,
             lastChanged = previewInstant,
-            lastUpdated = previewInstant,
+            label = "On",
         ),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -189,34 +213,31 @@ private fun ReadOnlyActive() = PreviewWrap {
 @Composable
 private fun ReadOnlyStale() = PreviewWrap {
     EntityCardBody(
-        entityId = "sensor.living_room_temp",
-        entity = sensorEntity(),
+        state = readOnlyState(isStale = true),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = true,
     )
 }
 
-// No-op for read-only variant — renders identically to ReadOnly_Default.
+// No-op for read-only — renders identically to default.
 @Preview(name = "ReadOnly_Optimistic")
 @Composable
 private fun ReadOnlyOptimistic() = PreviewWrap {
     EntityCardBody(
-        entityId = "sensor.living_room_temp",
-        entity = sensorEntity(),
+        state = readOnlyState(),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
-// No-op for read-only variant — renders identically to ReadOnly_Default.
+// No-op for read-only — renders identically to default.
 @Preview(name = "ReadOnly_Error")
 @Composable
 private fun ReadOnlyError() = PreviewWrap {
     EntityCardBody(
-        entityId = "sensor.living_room_temp",
-        entity = sensorEntity(),
+        state = readOnlyState(),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -226,10 +247,9 @@ private fun ReadOnlyError() = PreviewWrap {
 @Composable
 private fun StepperDefault() = PreviewWrap {
     EntityCardBody(
-        entityId = "climate.lounge",
-        entity = climateEntity(state = "off", target = null, current = null),
+        state = stepperState(currentLabel = "Off", formattedTemp = "0.0°", hasTarget = false),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -237,10 +257,9 @@ private fun StepperDefault() = PreviewWrap {
 @Composable
 private fun StepperActive() = PreviewWrap {
     EntityCardBody(
-        entityId = "climate.lounge",
-        entity = climateEntity(),
+        state = stepperState(),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -248,10 +267,9 @@ private fun StepperActive() = PreviewWrap {
 @Composable
 private fun StepperStale() = PreviewWrap {
     EntityCardBody(
-        entityId = "climate.lounge",
-        entity = climateEntity(),
+        state = stepperState(isStale = true),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = true,
     )
 }
 
@@ -259,11 +277,9 @@ private fun StepperStale() = PreviewWrap {
 @Composable
 private fun StepperOptimistic() = PreviewWrap {
     EntityCardBody(
-        entityId = "climate.lounge",
-        entity = climateEntity(target = 21.0),
+        state = stepperState(formattedTemp = "21.5°"),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
-        forcedOptimisticTemp = 21.5,
     )
 }
 
@@ -271,11 +287,9 @@ private fun StepperOptimistic() = PreviewWrap {
 @Composable
 private fun StepperError() = PreviewWrap {
     EntityCardBody(
-        entityId = "climate.lounge",
-        entity = climateEntity(),
+        state = stepperState(rejectionCounter = 1L),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
-        forcedRejected = true,
     )
 }
 
@@ -285,10 +299,9 @@ private fun StepperError() = PreviewWrap {
 @Composable
 private fun TriggerDefault() = PreviewWrap {
     EntityCardBody(
-        entityId = "script.goodnight",
-        entity = scriptEntity(),
+        state = triggerState(),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -296,11 +309,9 @@ private fun TriggerDefault() = PreviewWrap {
 @Composable
 private fun TriggerActive() = PreviewWrap {
     EntityCardBody(
-        entityId = "script.goodnight",
-        entity = scriptEntity(state = "on"),
+        state = triggerState(subtitle = "On", triggerCounter = 1L),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
-        forcedTriggerPulse = true,
     )
 }
 
@@ -308,23 +319,20 @@ private fun TriggerActive() = PreviewWrap {
 @Composable
 private fun TriggerStale() = PreviewWrap {
     EntityCardBody(
-        entityId = "script.goodnight",
-        entity = scriptEntity(),
+        state = triggerState(isStale = true),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = true,
     )
 }
 
-// Trigger_Optimistic == Trigger_Active per spec — fire-and-forget, no optimistic state.
+// Trigger_Optimistic == Trigger_Active per spec — fire-and-forget.
 @Preview(name = "Trigger_Optimistic")
 @Composable
 private fun TriggerOptimistic() = PreviewWrap {
     EntityCardBody(
-        entityId = "script.goodnight",
-        entity = scriptEntity(state = "on"),
+        state = triggerState(subtitle = "On", triggerCounter = 1L),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
-        forcedTriggerPulse = true,
     )
 }
 
@@ -332,10 +340,9 @@ private fun TriggerOptimistic() = PreviewWrap {
 @Composable
 private fun TriggerError() = PreviewWrap {
     EntityCardBody(
-        entityId = "script.goodnight",
-        entity = scriptEntity(state = "unavailable"),
+        state = triggerState(subtitle = "Unavailable", isInteractable = false),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -345,10 +352,9 @@ private fun TriggerError() = PreviewWrap {
 @Composable
 private fun MediaPlaying() = PreviewWrap {
     EntityCardBody(
-        entityId = "media_player.living_room",
-        entity = mediaEntity(state = "playing"),
+        state = mediaState(),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -356,10 +362,9 @@ private fun MediaPlaying() = PreviewWrap {
 @Composable
 private fun MediaPaused() = PreviewWrap {
     EntityCardBody(
-        entityId = "media_player.living_room",
-        entity = mediaEntity(state = "paused"),
+        state = mediaState(subtitle = "Paused", isPlaying = false),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -367,10 +372,9 @@ private fun MediaPaused() = PreviewWrap {
 @Composable
 private fun MediaIdle() = PreviewWrap {
     EntityCardBody(
-        entityId = "media_player.living_room",
-        entity = mediaEntity(state = "idle", title = null),
+        state = mediaState(title = "Living Room Speaker", subtitle = "Idle", isPlaying = false),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -378,10 +382,9 @@ private fun MediaIdle() = PreviewWrap {
 @Composable
 private fun MediaStale() = PreviewWrap {
     EntityCardBody(
-        entityId = "media_player.living_room",
-        entity = mediaEntity(state = "playing"),
+        state = mediaState(isStale = true),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = true,
     )
 }
 
@@ -389,10 +392,9 @@ private fun MediaStale() = PreviewWrap {
 @Composable
 private fun MediaError() = PreviewWrap {
     EntityCardBody(
-        entityId = "media_player.living_room",
-        entity = mediaEntity(state = "unavailable"),
+        state = mediaState(subtitle = "Unavailable", isPlaying = false, isInteractable = false),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -402,10 +404,9 @@ private fun MediaError() = PreviewWrap {
 @Composable
 private fun UnknownDefault() = PreviewWrap {
     EntityCardBody(
-        entityId = "vacuum.upstairs",
-        entity = unknownEntity(),
+        state = unknownState(),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = false,
     )
 }
 
@@ -413,9 +414,8 @@ private fun UnknownDefault() = PreviewWrap {
 @Composable
 private fun UnknownStale() = PreviewWrap {
     EntityCardBody(
-        entityId = "vacuum.upstairs",
-        entity = unknownEntity(state = "docked"),
+        state = unknownState(subtitle = "Docked", isStale = true),
+        onIntent = {},
         size = EntityCardSize.Standard,
-        isStale = true,
     )
 }
