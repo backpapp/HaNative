@@ -87,12 +87,21 @@ private class FakeHaWebSocketClient : HaWebSocketClient {
     private val _lastMessageEpochMs = MutableStateFlow<Long?>(null)
     override val lastMessageEpochMs: StateFlow<Long?> = _lastMessageEpochMs.asStateFlow()
 
+    private val _authInvalid = MutableStateFlow(false)
+    override val authInvalid: StateFlow<Boolean> = _authInvalid.asStateFlow()
+
     private val _events = MutableSharedFlow<HaEvent>(extraBufferCapacity = 16)
 
     val connectsCalledWith = mutableListOf<String>()
 
+    fun simulateAuthInvalid() {
+        _authInvalid.value = true
+        _isConnected.value = false
+    }
+
     override suspend fun connect(serverUrl: String, accessToken: String) {
         connectsCalledWith += serverUrl
+        _authInvalid.value = false
         _isConnected.value = true
     }
 

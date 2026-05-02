@@ -14,7 +14,7 @@ val presentationModule = module {
     viewModel { OnboardingViewModel(get(), get()) }
     viewModel { AuthViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { StartupViewModel(get(), get(), get()) }
-    viewModel { SettingsViewModel(get()) }
+    viewModel { SettingsViewModel(get(), get()) }
     viewModel { EntityPickerViewModel(get()) }
     viewModel { (entityId: String) -> EntityCardViewModel(entityId, get(), get()) }
     viewModel {

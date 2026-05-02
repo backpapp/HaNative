@@ -30,6 +30,9 @@ sealed class StaleIndicatorKind {
     data object Connected : StaleIndicatorKind()
     data object Stale : StaleIndicatorKind()
     data object Reconnecting : StaleIndicatorKind()
+    // HA rejected the stored credential. Distinct from Stale so the UI can prompt re-auth
+    // instead of showing "Reconnecting…" indefinitely.
+    data object InvalidAuth : StaleIndicatorKind()
 }
 
 data class DashboardCardUi(

@@ -236,10 +236,11 @@ class DashboardViewModel(
 
         // Cold-start hide: before the first inbound WS frame, treat Disconnected/Reconnecting
         // as Connected so the indicator stays hidden through the initial attemptConnect window.
-        // Failed is NEVER hidden — it represents a permanent error (bad URL, auth) the user
-        // must see immediately even on cold start.
+        // Failed and InvalidAuth are NEVER hidden — they represent permanent errors (bad URL,
+        // bad token) the user must see immediately even on cold start.
         val effectiveConnection = when {
             connection == ServerManager.ConnectionState.Failed -> connection
+            connection == ServerManager.ConnectionState.InvalidAuth -> connection
             lastMessageMs == null && connection != ServerManager.ConnectionState.Connected ->
                 ServerManager.ConnectionState.Connected
             else -> connection
@@ -280,6 +281,8 @@ class DashboardViewModel(
             StaleIndicatorUi(StaleIndicatorKind.Connected)
         ServerManager.ConnectionState.Reconnecting ->
             StaleIndicatorUi(StaleIndicatorKind.Reconnecting, lastMessageMs)
+        ServerManager.ConnectionState.InvalidAuth ->
+            StaleIndicatorUi(StaleIndicatorKind.InvalidAuth, lastMessageMs)
         ServerManager.ConnectionState.Disconnected,
         ServerManager.ConnectionState.Failed ->
             StaleIndicatorUi(StaleIndicatorKind.Stale, lastMessageMs)

@@ -14,6 +14,14 @@ interface HaWebSocketClient {
      */
     val lastMessageEpochMs: StateFlow<Long?>
 
+    /**
+     * Latches true when HA replies `auth_invalid` for the stored token. Cleared on
+     * successful auth_ok or after the credential is rotated and a new connect attempt
+     * begins. Consumers (ServerManager) use this to stop the reconnect loop and surface
+     * a re-auth prompt instead of hammering HA.
+     */
+    val authInvalid: StateFlow<Boolean>
+
     suspend fun connect(serverUrl: String, accessToken: String)
 
     fun events(): Flow<HaEvent>

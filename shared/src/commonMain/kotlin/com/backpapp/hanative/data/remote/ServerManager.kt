@@ -51,6 +51,17 @@ class ServerManager(
                 }
             }
         }
+        scope.launch {
+            webSocketClient.authInvalid.collect { invalid ->
+                if (invalid) {
+                    // Stored token was rejected by HA. Stop retrying — looping at ~1s
+                    // intervals just hammers HA. The user must rotate the credential
+                    // (Settings → Disconnect → re-onboard) before we attempt again.
+                    reconnectJob?.cancel()
+                    _connectionState.value = ConnectionState.InvalidAuth
+                }
+            }
+        }
     }
 
     fun connect() {
@@ -63,7 +74,11 @@ class ServerManager(
     }
 
     private fun triggerReconnect() {
-        if (_connectionState.value != ConnectionState.Connected) {
+        // Foreground transitions should not retry while we know the stored token is bad —
+        // wait until the user rotates credentials (which clears authInvalid via WS.connect).
+        if (_connectionState.value != ConnectionState.Connected &&
+            _connectionState.value != ConnectionState.InvalidAuth
+        ) {
             scheduleReconnect()
         }
     }
@@ -124,5 +139,9 @@ class ServerManager(
         object Reconnecting : ConnectionState()
         object Disconnected : ConnectionState()
         object Failed : ConnectionState()
+        // Terminal: HA rejected the stored credential with auth_invalid. Differs from
+        // Failed (which is a transport-retry exhaustion) — recovery requires a new token,
+        // not another reconnect.
+        object InvalidAuth : ConnectionState()
     }
 }

@@ -83,6 +83,8 @@ internal fun StaleStateIndicator(
                 }
             }
             StaleIndicatorKind.Reconnecting -> "Reconnecting to your home."
+            StaleIndicatorKind.InvalidAuth ->
+                "Sign-in expired. Open Settings, disconnect, and re-add your token."
         }
     }
 
@@ -131,6 +133,11 @@ internal fun StaleStateIndicator(
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
+                StaleIndicatorKind.InvalidAuth -> Text(
+                    text = "Sign-in expired",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.labelSmall,
+                )
             }
         }
     }

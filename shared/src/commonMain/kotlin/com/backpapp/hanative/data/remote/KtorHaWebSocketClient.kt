@@ -51,6 +51,9 @@ class KtorHaWebSocketClient(
     private val _lastMessageEpochMs = MutableStateFlow<Long?>(null)
     override val lastMessageEpochMs: StateFlow<Long?> = _lastMessageEpochMs.asStateFlow()
 
+    private val _authInvalid = MutableStateFlow(false)
+    override val authInvalid: StateFlow<Boolean> = _authInvalid.asStateFlow()
+
     private val _events = MutableSharedFlow<HaEvent>(
         extraBufferCapacity = 64,
         onBufferOverflow = BufferOverflow.SUSPEND,
@@ -72,6 +75,8 @@ class KtorHaWebSocketClient(
 
     override suspend fun connect(serverUrl: String, accessToken: String) {
         session?.close()
+        // Clear stale invalid-auth flag so the new attempt is judged on its own auth_ok / auth_invalid.
+        _authInvalid.value = false
 
         val wsUrl = when {
             serverUrl.startsWith("https://") -> "wss://" + serverUrl.removePrefix("https://")
@@ -128,6 +133,7 @@ class KtorHaWebSocketClient(
                 session.send(Frame.Text(subscribeCmd))
             }
             "auth_invalid" -> {
+                _authInvalid.value = true
                 _events.emit(HaEvent.ConnectionError(IllegalStateException("Auth invalid")))
                 session.close()
             }
