@@ -29,6 +29,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -38,12 +40,16 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+@OptIn(ExperimentalTime::class)
 class KtorHaWebSocketClient(
     private val httpClient: HttpClient,
 ) : HaWebSocketClient {
 
     private val _isConnected = MutableStateFlow(false)
     override val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+
+    private val _lastMessageEpochMs = MutableStateFlow<Long?>(null)
+    override val lastMessageEpochMs: StateFlow<Long?> = _lastMessageEpochMs.asStateFlow()
 
     private val _events = MutableSharedFlow<HaEvent>(
         extraBufferCapacity = 64,
@@ -79,7 +85,18 @@ class KtorHaWebSocketClient(
 
         newSession.launch {
             for (frame in newSession.incoming) {
-                if (frame is Frame.Text) handleFrame(frame.readText(), newSession, accessToken, subscribeId)
+                if (frame is Frame.Text) {
+                    // Quarantine per-frame: a thrown exception inside the loop closes the
+                    // session per Ktor semantics. Re-throw CancellationException so scope
+                    // teardown still propagates.
+                    try {
+                        handleFrame(frame.readText(), newSession, accessToken, subscribeId)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (t: Throwable) {
+                        println("WARN: KtorHaWebSocketClient frame processing failed: ${t.message}")
+                    }
+                }
             }
             _isConnected.value = false
             _events.emit(HaEvent.ConnectionLost)
@@ -93,7 +110,7 @@ class KtorHaWebSocketClient(
         accessToken: String,
         subscribeId: Int,
     ) {
-        val obj = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return
+        val obj = parseFrameUpdatingTimestamp(text) ?: return
         when (obj["type"]?.jsonPrimitive?.content) {
             "auth_required" -> {
                 val authMsg = json.encodeToString(
@@ -118,6 +135,24 @@ class KtorHaWebSocketClient(
             "result" -> handleResult(obj)
             else -> println("DEBUG: KtorHaWebSocketClient unknown message type: ${obj["type"]?.jsonPrimitive?.content}")
         }
+    }
+
+    // Quarantines malformed frames (corrupted bytes / non-JSON payloads) so a single
+    // bad frame logs and is dropped rather than propagating an exception that closes
+    // the WebSocket session per Ktor for-loop semantics. Timestamp updates only on
+    // payload-bearing frame types (event / result) so heartbeats and auth frames do
+    // not falsely refresh the user-visible "Last updated Xs ago" indicator.
+    internal fun parseFrameUpdatingTimestamp(text: String): JsonObject? {
+        val obj = runCatching { json.parseToJsonElement(text).jsonObject }
+            .getOrElse { e ->
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                null
+            } ?: return null
+        val type = obj["type"]?.jsonPrimitive?.content
+        if (type == "event" || type == "result") {
+            _lastMessageEpochMs.value = Clock.System.now().toEpochMilliseconds()
+        }
+        return obj
     }
 
     private suspend fun handleEvent(obj: JsonObject) {

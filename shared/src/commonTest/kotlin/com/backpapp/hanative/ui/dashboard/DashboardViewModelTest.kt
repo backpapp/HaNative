@@ -9,6 +9,8 @@ import com.backpapp.hanative.domain.usecase.AddCardUseCase
 import com.backpapp.hanative.domain.usecase.DeleteDashboardUseCase
 import com.backpapp.hanative.domain.usecase.GetActiveDashboardIdUseCase
 import com.backpapp.hanative.domain.usecase.GetDashboardsUseCase
+import com.backpapp.hanative.domain.usecase.ObserveConnectionStateUseCase
+import com.backpapp.hanative.domain.usecase.ObserveLastWebSocketMessageUseCase
 import com.backpapp.hanative.domain.usecase.RemoveCardUseCase
 import com.backpapp.hanative.domain.usecase.RenameDashboardUseCase
 import com.backpapp.hanative.domain.usecase.ReorderCardsUseCase
@@ -712,6 +714,198 @@ class DashboardViewModelTest {
         assertEquals(0, repo.renames.size)
     }
 
+    // ── Story 4.8: stale indicator ────────────────────────────────────────────
+
+    @Test
+    fun indicatorIsConnectedWhileServerConnected() = runTest {
+        val repo = FakeDashboardRepository().apply {
+            update(listOf(dashboard("d1", cards = listOf(card("c1", "d1", "light.x")))))
+        }
+        val connection = MutableStateFlow<ConnectionState>(ConnectionState.Connected)
+        val lastMs = MutableStateFlow<Long?>(1_700_000_000_000L)
+        val vm = buildVm(repo, connection = connection, lastMessage = lastMs)
+        val sub = launch { vm.state.collect {} }
+        advanceUntilIdle()
+        val s = vm.state.value as DashboardUiState.Success
+        assertEquals(StaleIndicatorKind.Connected, s.indicator.kind)
+        assertEquals(false, s.isStale)
+        sub.cancel()
+    }
+
+    @Test
+    fun indicatorIsReconnectingDuringReconnect() = runTest {
+        val repo = FakeDashboardRepository().apply {
+            update(listOf(dashboard("d1", cards = listOf(card("c1", "d1", "light.x")))))
+        }
+        val connection = MutableStateFlow<ConnectionState>(ConnectionState.Reconnecting)
+        val lastMs = MutableStateFlow<Long?>(1_700_000_000_000L)
+        val vm = buildVm(repo, connection = connection, lastMessage = lastMs)
+        val sub = launch { vm.state.collect {} }
+        advanceUntilIdle()
+        val s = vm.state.value as DashboardUiState.Success
+        assertEquals(StaleIndicatorKind.Reconnecting, s.indicator.kind)
+        assertEquals(1_700_000_000_000L, s.indicator.lastMessageEpochMs)
+        sub.cancel()
+    }
+
+    @Test
+    fun indicatorIsStaleOnDisconnected() = runTest {
+        val repo = FakeDashboardRepository().apply {
+            update(listOf(dashboard("d1", cards = listOf(card("c1", "d1", "light.x")))))
+        }
+        val connection = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
+        val lastMs = MutableStateFlow<Long?>(1_700_000_000_000L)
+        val vm = buildVm(repo, connection = connection, lastMessage = lastMs)
+        val sub = launch { vm.state.collect {} }
+        advanceUntilIdle()
+        val s = vm.state.value as DashboardUiState.Success
+        assertEquals(StaleIndicatorKind.Stale, s.indicator.kind)
+        sub.cancel()
+    }
+
+    @Test
+    fun indicatorIsStaleOnFailed() = runTest {
+        val repo = FakeDashboardRepository().apply {
+            update(listOf(dashboard("d1", cards = listOf(card("c1", "d1", "light.x")))))
+        }
+        val connection = MutableStateFlow<ConnectionState>(ConnectionState.Failed)
+        val lastMs = MutableStateFlow<Long?>(1_700_000_000_000L)
+        val vm = buildVm(repo, connection = connection, lastMessage = lastMs)
+        val sub = launch { vm.state.collect {} }
+        advanceUntilIdle()
+        val s = vm.state.value as DashboardUiState.Success
+        assertEquals(StaleIndicatorKind.Stale, s.indicator.kind)
+        sub.cancel()
+    }
+
+    @Test
+    fun coldLaunchHidesIndicatorBeforeFirstAttempt() = runTest {
+        val repo = FakeDashboardRepository().apply {
+            update(listOf(dashboard("d1", cards = listOf(card("c1", "d1", "light.x")))))
+        }
+        val connection = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
+        val lastMs = MutableStateFlow<Long?>(null)
+        val vm = buildVm(repo, connection = connection, lastMessage = lastMs)
+        val sub = launch { vm.state.collect {} }
+        advanceUntilIdle()
+        val s = vm.state.value as DashboardUiState.Success
+        // Cold-start hide rule: Disconnected + no message yet → indicator hidden
+        assertEquals(StaleIndicatorKind.Connected, s.indicator.kind)
+        assertEquals(false, s.isStale)
+        sub.cancel()
+    }
+
+    @Test
+    fun coldStartFailedShowsStaleNotHidden() = runTest {
+        // Failed = permanent error (bad URL, auth). The cold-start hide rule must NOT
+        // mask it even when lastMessageEpochMs is null — user has to see the failure.
+        val repo = FakeDashboardRepository().apply {
+            update(listOf(dashboard("d1", cards = listOf(card("c1", "d1", "light.x")))))
+        }
+        val connection = MutableStateFlow<ConnectionState>(ConnectionState.Failed)
+        val lastMs = MutableStateFlow<Long?>(null)
+        val vm = buildVm(repo, connection = connection, lastMessage = lastMs)
+        val sub = launch { vm.state.collect {} }
+        advanceUntilIdle()
+        val s = vm.state.value as DashboardUiState.Success
+        assertEquals(StaleIndicatorKind.Stale, s.indicator.kind, "Failed must NOT be hidden by cold-start rule")
+        assertEquals(true, s.isStale)
+        sub.cancel()
+    }
+
+    @Test
+    fun coldLaunchWithCacheRendersStaleSuccess() = runTest {
+        val repo = FakeDashboardRepository().apply {
+            update(listOf(dashboard("d1", name = "Home", cards = listOf(card("c1", "d1", "light.x")))))
+        }
+        val connection = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
+        val lastMs = MutableStateFlow<Long?>(1_699_999_900_000L)
+        val vm = buildVm(repo, connection = connection, lastMessage = lastMs)
+        val sub = launch { vm.state.collect {} }
+        advanceUntilIdle()
+        val s = vm.state.value
+        assertIs<DashboardUiState.Success>(s)
+        assertEquals(true, s.isStale)
+        assertEquals(StaleIndicatorKind.Stale, s.indicator.kind)
+        sub.cancel()
+    }
+
+    @Test
+    fun coldLaunchEmptyAndDisconnectedRendersEmptyWithStale() = runTest {
+        val repo = FakeDashboardRepository()
+        val connection = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
+        val lastMs = MutableStateFlow<Long?>(1_699_999_900_000L)
+        val vm = buildVm(repo, connection = connection, lastMessage = lastMs)
+        val sub = launch { vm.state.collect {} }
+        advanceUntilIdle()
+        val s = vm.state.value
+        assertIs<DashboardUiState.Empty>(s)
+        assertEquals(StaleIndicatorKind.Stale, s.indicator.kind)
+        sub.cancel()
+    }
+
+    @Test
+    fun reconnectFlipsIndicatorToConnected() = runTest {
+        val repo = FakeDashboardRepository().apply {
+            update(listOf(dashboard("d1", cards = listOf(card("c1", "d1", "light.x")))))
+        }
+        val connection = MutableStateFlow<ConnectionState>(ConnectionState.Reconnecting)
+        val lastMs = MutableStateFlow<Long?>(1_700_000_000_000L)
+        val vm = buildVm(repo, connection = connection, lastMessage = lastMs)
+        val sub = launch { vm.state.collect {} }
+        advanceUntilIdle()
+        assertEquals(StaleIndicatorKind.Reconnecting, (vm.state.value as DashboardUiState.Success).indicator.kind)
+
+        connection.value = ConnectionState.Connected
+        advanceUntilIdle()
+        assertEquals(StaleIndicatorKind.Connected, (vm.state.value as DashboardUiState.Success).indicator.kind)
+        sub.cancel()
+    }
+
+    @Test
+    fun lastMessageMsPropagatesToIndicator() = runTest {
+        val repo = FakeDashboardRepository().apply {
+            update(listOf(dashboard("d1", cards = listOf(card("c1", "d1", "light.x")))))
+        }
+        val connection = MutableStateFlow<ConnectionState>(ConnectionState.Reconnecting)
+        val lastMs = MutableStateFlow<Long?>(1_700_000_000_000L)
+        val vm = buildVm(repo, connection = connection, lastMessage = lastMs)
+        val sub = launch { vm.state.collect {} }
+        advanceUntilIdle()
+        assertEquals(1_700_000_000_000L, (vm.state.value as DashboardUiState.Success).indicator.lastMessageEpochMs)
+
+        lastMs.value = 1_700_000_005_000L
+        advanceUntilIdle()
+        assertEquals(1_700_000_005_000L, (vm.state.value as DashboardUiState.Success).indicator.lastMessageEpochMs)
+        sub.cancel()
+    }
+
+    @Test
+    fun isStaleCardFlagMatchesIndicatorKind() = runTest {
+        val repo = FakeDashboardRepository().apply {
+            update(listOf(dashboard("d1", cards = listOf(card("c1", "d1", "light.x")))))
+        }
+        val connection = MutableStateFlow<ConnectionState>(ConnectionState.Connected)
+        val lastMs = MutableStateFlow<Long?>(1_700_000_000_000L)
+        val vm = buildVm(repo, connection = connection, lastMessage = lastMs)
+        val sub = launch { vm.state.collect {} }
+        advanceUntilIdle()
+
+        listOf(
+            ConnectionState.Connected to false,
+            ConnectionState.Reconnecting to true,
+            ConnectionState.Disconnected to true,
+            ConnectionState.Failed to true,
+        ).forEach { (state, expectedStale) ->
+            connection.value = state
+            advanceUntilIdle()
+            val s = vm.state.value as DashboardUiState.Success
+            assertEquals(expectedStale, s.isStale, "isStale for $state")
+            assertEquals(expectedStale, s.indicator.kind != StaleIndicatorKind.Connected)
+        }
+        sub.cancel()
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildVm(
@@ -719,6 +913,7 @@ class DashboardViewModelTest {
         activeRepo: FakeActiveDashboardRepository = FakeActiveDashboardRepository(null),
         chrome: DashboardChrome = DashboardChrome(),
         connection: StateFlow<ConnectionState> = MutableStateFlow(ConnectionState.Connected),
+        lastMessage: StateFlow<Long?> = MutableStateFlow(1_700_000_000_000L),
         idGenerator: IdGenerator = SequentialIdGenerator(generateSequence(0L) { it + 1 }.map { "id-$it" }.take(50).toList()),
     ): DashboardViewModel = DashboardViewModel(
         getDashboards = GetDashboardsUseCase(repo),
@@ -731,7 +926,8 @@ class DashboardViewModelTest {
         getActiveDashboardId = GetActiveDashboardIdUseCase(activeRepo),
         setActiveDashboardId = SetActiveDashboardIdUseCase(activeRepo),
         idGenerator = idGenerator,
-        connectionState = connection,
+        observeConnectionState = ObserveConnectionStateUseCase(connection),
+        observeLastWebSocketMessage = ObserveLastWebSocketMessageUseCase(lastMessage),
         dashboardChrome = chrome,
         clock = FixedClock(Instant.fromEpochMilliseconds(1_700_000_000_000L)),
     )

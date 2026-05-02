@@ -4,8 +4,8 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 
-actual class AppLifecycleObserver actual constructor() {
-    actual fun onForeground(callback: () -> Unit) {
+actual class AppLifecycleObserver actual constructor() : LifecycleForegrounder {
+    actual override fun onForeground(callback: () -> Unit) {
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 callback()

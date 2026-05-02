@@ -336,3 +336,75 @@ private fun DashboardDeleteDialogOpen() = PreviewWrap(
         ),
     ),
 )
+
+// ── Story 4.8 indicator previews ─────────────────────────────────────────────
+
+@Preview(name = "Dashboard_Success_Indicator_Connected")
+@Composable
+private fun DashboardIndicatorConnected() = PreviewWrap(
+    DashboardUiState.Success(
+        dashboardName = "Home",
+        cards = fewCards,
+        isStale = false,
+        indicator = StaleIndicatorUi(StaleIndicatorKind.Connected),
+    ),
+)
+
+@Preview(name = "Dashboard_Success_Indicator_Stale_RecentMessage")
+@Composable
+private fun DashboardIndicatorStaleRecent() = PreviewWrap(
+    DashboardUiState.Success(
+        dashboardName = "Home",
+        cards = fewCards,
+        isStale = true,
+        indicator = StaleIndicatorUi(
+            kind = StaleIndicatorKind.Stale,
+            // ~30s ago relative to a fixed preview baseline; runtime clock makes
+            // exact value drift in IDE preview, but the "Xs ago" template renders.
+            lastMessageEpochMs = System.currentTimeMillis() - 30_000L,
+        ),
+    ),
+)
+
+@Preview(name = "Dashboard_Success_Indicator_Stale_NoMessage")
+@Composable
+private fun DashboardIndicatorStaleNoMessage() = PreviewWrap(
+    DashboardUiState.Success(
+        dashboardName = "Home",
+        cards = fewCards,
+        isStale = true,
+        indicator = StaleIndicatorUi(
+            kind = StaleIndicatorKind.Stale,
+            lastMessageEpochMs = null,
+        ),
+    ),
+)
+
+@Preview(name = "Dashboard_Success_Indicator_Reconnecting")
+@Composable
+private fun DashboardIndicatorReconnecting() = PreviewWrap(
+    DashboardUiState.Success(
+        dashboardName = "Home",
+        cards = fewCards,
+        isStale = true,
+        indicator = StaleIndicatorUi(
+            kind = StaleIndicatorKind.Reconnecting,
+            lastMessageEpochMs = System.currentTimeMillis() - 5_000L,
+        ),
+    ),
+)
+
+@Preview(name = "Dashboard_Empty_Indicator_Stale")
+@Composable
+private fun DashboardEmptyIndicatorStale() = PreviewWrap(
+    DashboardUiState.Empty(
+        switcher = DashboardSwitcherUi(
+            dashboards = listOf(DashboardSummaryUi(id = "d1", name = "Home", cardCount = 0)),
+            activeDashboardId = "d1",
+        ),
+        indicator = StaleIndicatorUi(
+            kind = StaleIndicatorKind.Stale,
+            lastMessageEpochMs = null,
+        ),
+    ),
+)

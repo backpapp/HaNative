@@ -9,6 +9,8 @@ import com.backpapp.hanative.domain.usecase.AddCardUseCase
 import com.backpapp.hanative.domain.usecase.DeleteDashboardUseCase
 import com.backpapp.hanative.domain.usecase.GetActiveDashboardIdUseCase
 import com.backpapp.hanative.domain.usecase.GetDashboardsUseCase
+import com.backpapp.hanative.domain.usecase.ObserveConnectionStateUseCase
+import com.backpapp.hanative.domain.usecase.ObserveLastWebSocketMessageUseCase
 import com.backpapp.hanative.domain.usecase.RemoveCardUseCase
 import com.backpapp.hanative.domain.usecase.RenameDashboardUseCase
 import com.backpapp.hanative.domain.usecase.ReorderCardsUseCase
@@ -53,10 +55,14 @@ class DashboardViewModel(
     private val getActiveDashboardId: GetActiveDashboardIdUseCase,
     private val setActiveDashboardId: SetActiveDashboardIdUseCase,
     private val idGenerator: IdGenerator,
-    private val connectionState: StateFlow<ServerManager.ConnectionState>,
+    observeConnectionState: ObserveConnectionStateUseCase,
+    observeLastWebSocketMessage: ObserveLastWebSocketMessageUseCase,
     private val dashboardChrome: DashboardChrome,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
+
+    private val connectionState: StateFlow<ServerManager.ConnectionState> = observeConnectionState()
+    private val lastMessageMs: StateFlow<Long?> = observeLastWebSocketMessage()
 
     private data class PendingDashboard(val id: String, val name: String, val createdAt: Long)
 
@@ -101,6 +107,7 @@ class DashboardViewModel(
         val persistedActiveId: String?,
         val pending: PendingDashboard?,
         val switcherChrome: SwitcherChromeState,
+        val lastMessageMs: Long?,
     )
 
     val state: StateFlow<DashboardUiState> = combine(
@@ -109,7 +116,8 @@ class DashboardViewModel(
             getActiveDashboardId(),
             _pendingNewDashboard,
             _switcherChrome,
-        ) { d, aid, pn, sc -> Sources(d, aid, pn, sc) },
+            lastMessageMs,
+        ) { d, aid, pn, sc, lm -> Sources(d, aid, pn, sc, lm) },
         connectionState,
         _pickerVisible,
         _optimisticOrder,
@@ -222,14 +230,30 @@ class DashboardViewModel(
         pickerVisible: Boolean,
         optimisticOrder: List<String>?,
     ): DashboardUiState {
-        val (dashboards, persistedActiveId, pending, switcherChrome) = sources
+        val (dashboards, persistedActiveId, pending, switcherChrome, lastMessageMs) = sources
         val active = activeView(dashboards, persistedActiveId, pending)
         val switcher = buildSwitcherUi(dashboards, pending, active?.id, switcherChrome)
 
-        if (active == null || active.cards.isEmpty()) {
-            return DashboardUiState.Empty(pickerVisible = pickerVisible, switcher = switcher)
+        // Cold-start hide: before the first inbound WS frame, treat Disconnected/Reconnecting
+        // as Connected so the indicator stays hidden through the initial attemptConnect window.
+        // Failed is NEVER hidden — it represents a permanent error (bad URL, auth) the user
+        // must see immediately even on cold start.
+        val effectiveConnection = when {
+            connection == ServerManager.ConnectionState.Failed -> connection
+            lastMessageMs == null && connection != ServerManager.ConnectionState.Connected ->
+                ServerManager.ConnectionState.Connected
+            else -> connection
         }
-        val isStale = connection != ServerManager.ConnectionState.Connected
+        val indicator = deriveStaleIndicator(effectiveConnection, lastMessageMs)
+
+        if (active == null || active.cards.isEmpty()) {
+            return DashboardUiState.Empty(
+                pickerVisible = pickerVisible,
+                switcher = switcher,
+                indicator = indicator,
+            )
+        }
+        val isStale = indicator.kind != StaleIndicatorKind.Connected
         val sorted = active.cards.sortedBy { it.position }
         val ordered = if (optimisticOrder != null) {
             val byId = sorted.associateBy { it.id }
@@ -244,7 +268,21 @@ class DashboardViewModel(
             isStale = isStale,
             pickerVisible = pickerVisible,
             switcher = switcher,
+            indicator = indicator,
         )
+    }
+
+    private fun deriveStaleIndicator(
+        connection: ServerManager.ConnectionState,
+        lastMessageMs: Long?,
+    ): StaleIndicatorUi = when (connection) {
+        ServerManager.ConnectionState.Connected ->
+            StaleIndicatorUi(StaleIndicatorKind.Connected)
+        ServerManager.ConnectionState.Reconnecting ->
+            StaleIndicatorUi(StaleIndicatorKind.Reconnecting, lastMessageMs)
+        ServerManager.ConnectionState.Disconnected,
+        ServerManager.ConnectionState.Failed ->
+            StaleIndicatorUi(StaleIndicatorKind.Stale, lastMessageMs)
     }
 
     private fun activeView(

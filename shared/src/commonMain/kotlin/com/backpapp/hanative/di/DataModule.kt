@@ -13,6 +13,7 @@ import com.backpapp.hanative.domain.repository.ActiveDashboardRepository
 import com.backpapp.hanative.domain.repository.DashboardRepository
 import com.backpapp.hanative.domain.repository.EntityRepository
 import com.backpapp.hanative.domain.repository.HaWebSocketClient
+import com.backpapp.hanative.platform.AppLifecycleObserver
 import com.backpapp.hanative.platform.OAuthCallbackBus
 import com.backpapp.hanative.ui.dashboard.DashboardChrome
 import kotlinx.coroutines.CoroutineScope
@@ -47,7 +48,7 @@ fun serverManagerModule(): Module = module {
         ServerManager(
             webSocketClient = get(),
             authRepository = get(),
-            lifecycleObserver = get(),
+            lifecycleObserver = get<AppLifecycleObserver>(),
             reconnectManager = get(),
             entityRepository = get(),
             scope = get(),

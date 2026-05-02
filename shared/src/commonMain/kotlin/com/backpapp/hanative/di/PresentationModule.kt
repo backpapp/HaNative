@@ -29,7 +29,8 @@ val presentationModule = module {
             getActiveDashboardId = get(),
             setActiveDashboardId = get(),
             idGenerator = get(),
-            connectionState = get<com.backpapp.hanative.data.remote.ServerManager>().connectionState,
+            observeConnectionState = get(),
+            observeLastWebSocketMessage = get(),
             dashboardChrome = get(),
         )
     }

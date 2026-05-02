@@ -3,7 +3,7 @@ package com.backpapp.hanative.data.remote
 import kotlin.concurrent.Volatile
 import com.backpapp.hanative.domain.repository.EntityRepository
 import com.backpapp.hanative.domain.repository.HaWebSocketClient
-import com.backpapp.hanative.platform.AppLifecycleObserver
+import com.backpapp.hanative.platform.LifecycleForegrounder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +18,7 @@ private const val CONNECT_TIMEOUT_MS = 10_000L
 class ServerManager(
     private val webSocketClient: HaWebSocketClient,
     private val authRepository: AuthenticationRepositoryImpl,
-    private val lifecycleObserver: AppLifecycleObserver,
+    private val lifecycleObserver: LifecycleForegrounder,
     private val reconnectManager: HaReconnectManager,
     private val entityRepository: EntityRepository,
     private val scope: CoroutineScope,

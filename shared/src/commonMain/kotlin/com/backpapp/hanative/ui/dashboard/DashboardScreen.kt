@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -91,6 +92,7 @@ internal fun DashboardBody(
                 dashboardName = state.switcher.dashboards
                     .firstOrNull { it.id == state.switcher.activeDashboardId }
                     ?.name,
+                indicator = state.indicator,
                 onTapToAdd = { onIntent(DashboardIntent.OpenPicker) },
             )
             is DashboardUiState.Success -> Crossfade(
@@ -180,6 +182,7 @@ private fun EmptyDashboardState(
     onTapToAdd: () -> Unit,
     modifier: Modifier = Modifier,
     dashboardName: String? = null,
+    indicator: StaleIndicatorUi = StaleIndicatorUi(StaleIndicatorKind.Connected),
 ) {
     Column(
         modifier = modifier
@@ -194,11 +197,27 @@ private fun EmptyDashboardState(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (dashboardName != null) {
-            Text(
-                text = dashboardName,
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.semantics { heading() },
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = dashboardName,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f).semantics { heading() },
+                )
+                StaleStateIndicator(state = indicator)
+            }
+            Spacer(Modifier.size(16.dp))
+        } else if (indicator.kind != StaleIndicatorKind.Connected) {
+            // No dashboard name but still need to surface staleness on cold launch.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End,
+            ) {
+                StaleStateIndicator(state = indicator)
+            }
             Spacer(Modifier.size(16.dp))
         }
         Text(
@@ -242,7 +261,7 @@ private fun SuccessContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        DashboardHeader(name = state.dashboardName)
+        DashboardHeader(name = state.dashboardName, indicator = state.indicator)
         LazyColumn(
             state = lazyListState,
             modifier = Modifier.fillMaxSize(),
@@ -268,15 +287,20 @@ private fun SuccessContent(
 }
 
 @Composable
-private fun DashboardHeader(name: String) {
-    Text(
-        text = name,
-        style = MaterialTheme.typography.headlineSmall,
+private fun DashboardHeader(name: String, indicator: StaleIndicatorUi) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)
-            .semantics { heading() },
-    )
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.weight(1f).semantics { heading() },
+        )
+        StaleStateIndicator(state = indicator)
+    }
 }
 
 @Composable

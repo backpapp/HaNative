@@ -8,6 +8,12 @@ import kotlinx.datetime.Instant
 interface HaWebSocketClient {
     val isConnected: StateFlow<Boolean>
 
+    /**
+     * ms-since-epoch of the most recent inbound WebSocket frame parsed successfully.
+     * null until the first message of the session arrives.
+     */
+    val lastMessageEpochMs: StateFlow<Long?>
+
     suspend fun connect(serverUrl: String, accessToken: String)
 
     fun events(): Flow<HaEvent>

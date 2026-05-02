@@ -5,6 +5,7 @@ sealed class DashboardUiState {
     data class Empty(
         val pickerVisible: Boolean = false,
         val switcher: DashboardSwitcherUi = DashboardSwitcherUi(),
+        val indicator: StaleIndicatorUi = StaleIndicatorUi(StaleIndicatorKind.Connected),
     ) : DashboardUiState()
     data class Success(
         val dashboardName: String,
@@ -13,7 +14,22 @@ sealed class DashboardUiState {
         val isStale: Boolean,
         val pickerVisible: Boolean = false,
         val switcher: DashboardSwitcherUi = DashboardSwitcherUi(),
+        val indicator: StaleIndicatorUi = StaleIndicatorUi(StaleIndicatorKind.Connected),
     ) : DashboardUiState()
+}
+
+data class StaleIndicatorUi(
+    val kind: StaleIndicatorKind,
+    // Used only when kind is Stale or Reconnecting. ms-since-epoch of the last successful
+    // WebSocket message receipt; null if app has never connected this session (cold launch
+    // with HA unreachable — shows "Last updated --" fallback).
+    val lastMessageEpochMs: Long? = null,
+)
+
+sealed class StaleIndicatorKind {
+    data object Connected : StaleIndicatorKind()
+    data object Stale : StaleIndicatorKind()
+    data object Reconnecting : StaleIndicatorKind()
 }
 
 data class DashboardCardUi(

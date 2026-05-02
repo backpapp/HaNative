@@ -1,5 +1,15 @@
 # Deferred Work
 
+## Deferred from: code review of 4-8-stale-state-indicator-offline-resilience (2026-05-01)
+
+- **Loading state has no `indicator` field** — if WS down at startup, user sees spinner only (no Reconnecting affordance). Out of scope per AC15. Capture for future story.
+- **i18n seam for indicator strings** — "Last updated Xs ago" / "Reconnecting…" hardcoded English. Out of scope V1.
+- **Path B hides `Reconnecting` when `lastMessageMs == null`** — true cold-start reconnecting attempt rendered as Connected. Spec endorsed Path B trade-off; revisit if user reports confusion.
+- **`combine` ordering race at startup** — could flash `Stale` for one frame before `connection` + `lastMessageMs` reach coherent pair. `distinctUntilChanged` mitigates, doesn't eliminate intermediate emissions. Add emission-list tests if regressions appear.
+- **No `CompositionLocal<Clock>` for `StaleStateIndicator` testability** — Compose UI test runner not wired (deferred from earlier stories), testability seam moot until runner lands.
+- **VM tests don't exercise time-component staleness** — Story 4.8 staleness is binary (kind-driven), not time-thresholded. Out of scope.
+- **`Failed` vs `Disconnected` user-facing differentiation** — partly captured in Decision 1 (cold-start Path B); if Decision 1 keeps Path B, consider a fourth indicator kind for `Failed` in a follow-up story.
+
 ## Deferred from: code review of 1-2-clean-architecture-package-structure-di (2026-04-25)
 
 - **koin.android dual declaration** — declared in both `androidApp/build.gradle.kts` and `shared:androidMain`; spec-compliant, Gradle deduplicates; no action needed until dependency graph grows complex.
