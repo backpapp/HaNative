@@ -159,7 +159,8 @@ private fun PreviewWrap(state: DashboardUiState) {
         DashboardBody(
             state = state,
             onIntent = {},
-            cardSlot = { card, isStale, m -> StubEntityCard(card, isStale, m) },
+            onNavigateToSettings = {},
+            cardSlot = { card, isStale, _, m -> StubEntityCard(card, isStale, m) },
             pickerSlot = { v, d, s -> StubPicker(v, d, s) },
             switcherSlot = { switcher, onIntent -> StubSwitcher(switcher, onIntent) },
         )

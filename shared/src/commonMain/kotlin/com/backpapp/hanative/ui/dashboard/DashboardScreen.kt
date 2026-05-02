@@ -7,7 +7,11 @@
 package com.backpapp.hanative.ui.dashboard
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,13 +26,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -37,12 +48,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.backpapp.hanative.platform.HapticPattern
 import com.backpapp.hanative.platform.LocalHapticEngine
@@ -54,22 +68,31 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @Composable
-fun DashboardScreen(modifier: Modifier = Modifier) {
+fun DashboardScreen(
+    onNavigateToSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val viewModel: DashboardViewModel = koinViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val haptic = LocalHapticEngine.current
     LaunchedEffect(viewModel) {
         viewModel.haptics.collect { haptic.fire(it) }
     }
-    DashboardBody(state = state, onIntent = viewModel::onIntent, modifier = modifier)
+    DashboardBody(
+        state = state,
+        onIntent = viewModel::onIntent,
+        onNavigateToSettings = onNavigateToSettings,
+        modifier = modifier,
+    )
 }
 
 @Composable
 internal fun DashboardBody(
     state: DashboardUiState,
     onIntent: (DashboardIntent) -> Unit,
+    onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
-    cardSlot: @Composable (DashboardCardUi, Boolean, Modifier) -> Unit = { card, isStale, m ->
+    cardSlot: @Composable (DashboardCardUi, Boolean, Boolean, Modifier) -> Unit = { card, isStale, _, m ->
         EntityCard(entityId = card.entityId, isStale = isStale, modifier = m)
     },
     pickerSlot: @Composable (Boolean, () -> Unit, (String) -> Unit) -> Unit = { isVisible, onDismiss, onEntitySelected ->
@@ -83,6 +106,12 @@ internal fun DashboardBody(
         DashboardSwitcherSheet(state = switcher, onIntent = onIntent2)
     },
 ) {
+    val editMode = when (state) {
+        is DashboardUiState.Empty -> state.editMode
+        is DashboardUiState.Success -> state.editMode
+        DashboardUiState.Loading -> false
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         when (state) {
             DashboardUiState.Loading -> LoadingContent()
@@ -94,6 +123,8 @@ internal fun DashboardBody(
                     ?.name,
                 indicator = state.indicator,
                 onTapToAdd = { onIntent(DashboardIntent.OpenPicker) },
+                onTitleClick = { onIntent(DashboardIntent.OpenDashboardPicker) },
+                onTitleLongClick = { onIntent(DashboardIntent.OpenDashboardActions) },
             )
             is DashboardUiState.Success -> Crossfade(
                 // P9: key on activeDashboardId so the cross-fade fires on dashboard switch
@@ -115,6 +146,16 @@ internal fun DashboardBody(
             }
         }
 
+        // Done chip — visible only in edit mode, exits the mode when tapped.
+        if (editMode && state is DashboardUiState.Success) {
+            FilledTonalButton(
+                onClick = { onIntent(DashboardIntent.ExitEditMode) },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+            ) { Text("Done") }
+        }
+
         val pickerVisible = when (state) {
             is DashboardUiState.Empty -> state.pickerVisible
             is DashboardUiState.Success -> state.pickerVisible
@@ -134,6 +175,47 @@ internal fun DashboardBody(
         if (switcher != null) {
             switcherSlot(switcher, onIntent)
             DeleteConfirmDialog(switcher = switcher, onIntent = onIntent)
+        }
+
+        // Tappable-title nav sheets — hosted in the Box so they overlay all dashboard content.
+        val dashboardPickerVisible = when (state) {
+            is DashboardUiState.Empty -> state.dashboardPickerVisible
+            is DashboardUiState.Success -> state.dashboardPickerVisible
+            DashboardUiState.Loading -> false
+        }
+        val dashboardActionsVisible = when (state) {
+            is DashboardUiState.Empty -> state.dashboardActionsVisible
+            is DashboardUiState.Success -> state.dashboardActionsVisible
+            DashboardUiState.Loading -> false
+        }
+        val pickerQuery = when (state) {
+            is DashboardUiState.Empty -> state.dashboardPickerQuery
+            is DashboardUiState.Success -> state.dashboardPickerQuery
+            DashboardUiState.Loading -> ""
+        }
+        if (dashboardPickerVisible && switcher != null) {
+            DashboardPickerSheet(
+                state = switcher,
+                query = pickerQuery,
+                onIntent = onIntent,
+            )
+        }
+        if (dashboardActionsVisible) {
+            DashboardActionsSheet(
+                onEditCards = {
+                    onIntent(DashboardIntent.DismissDashboardActions)
+                    onIntent(DashboardIntent.EnterEditMode)
+                },
+                onManageDashboards = {
+                    onIntent(DashboardIntent.DismissDashboardActions)
+                    onIntent(DashboardIntent.OpenSwitcher)
+                },
+                onSettings = {
+                    onIntent(DashboardIntent.DismissDashboardActions)
+                    onNavigateToSettings()
+                },
+                onDismiss = { onIntent(DashboardIntent.DismissDashboardActions) },
+            )
         }
     }
 }
@@ -177,9 +259,12 @@ private fun LoadingContent() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EmptyDashboardState(
     onTapToAdd: () -> Unit,
+    onTitleClick: () -> Unit,
+    onTitleLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     dashboardName: String? = null,
     indicator: StaleIndicatorUi = StaleIndicatorUi(StaleIndicatorKind.Connected),
@@ -201,11 +286,26 @@ private fun EmptyDashboardState(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = dashboardName,
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.weight(1f).semantics { heading() },
-                )
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .combinedClickable(
+                            role = Role.Button,
+                            onClick = onTitleClick,
+                            onLongClick = onTitleLongClick,
+                        )
+                        .semantics { heading() },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = dashboardName,
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                    Icon(
+                        imageVector = Icons.Outlined.ArrowDropDown,
+                        contentDescription = "Switch dashboard",
+                    )
+                }
                 StaleStateIndicator(state = indicator)
             }
             Spacer(Modifier.size(16.dp))
@@ -242,11 +342,12 @@ private fun EmptyDashboardState(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SuccessContent(
     state: DashboardUiState.Success,
     onIntent: (DashboardIntent) -> Unit,
-    cardSlot: @Composable (DashboardCardUi, Boolean, Modifier) -> Unit,
+    cardSlot: @Composable (DashboardCardUi, Boolean, Boolean, Modifier) -> Unit,
 ) {
     val haptic = LocalHapticEngine.current
     val lazyListState = rememberLazyListState()
@@ -261,7 +362,13 @@ private fun SuccessContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        DashboardHeader(name = state.dashboardName, indicator = state.indicator)
+        DashboardHeader(
+            name = state.dashboardName,
+            indicator = state.indicator,
+            editMode = state.editMode,
+            onTitleClick = { onIntent(DashboardIntent.OpenDashboardPicker) },
+            onTitleLongClick = { onIntent(DashboardIntent.OpenDashboardActions) },
+        )
         LazyColumn(
             state = lazyListState,
             modifier = Modifier.fillMaxSize(),
@@ -270,13 +377,13 @@ private fun SuccessContent(
         ) {
             items(state.cards, key = { it.cardId }) { cardUi ->
                 ReorderableItem(reorderState, key = cardUi.cardId) {
-                    val rowModifier = Modifier
-                        .fillMaxWidth()
-                        .longPressDraggableHandle()
-                        .semantics {
-                            contentDescription = "Reorder ${cardUi.entityId}"
-                        }
-                    cardSlot(cardUi, state.isStale, rowModifier)
+                    EditableCardRow(
+                        cardUi = cardUi,
+                        editMode = state.editMode,
+                        isStale = state.isStale,
+                        cardSlot = cardSlot,
+                        onRemove = { onIntent(DashboardIntent.RemoveCard(cardUi.cardId)) },
+                    )
                 }
             }
             item(key = "__add_card__") {
@@ -286,19 +393,126 @@ private fun SuccessContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DashboardHeader(name: String, indicator: StaleIndicatorUi) {
+private fun sh.calvin.reorderable.ReorderableCollectionItemScope.EditableCardRow(
+    cardUi: DashboardCardUi,
+    editMode: Boolean,
+    isStale: Boolean,
+    cardSlot: @Composable (DashboardCardUi, Boolean, Boolean, Modifier) -> Unit,
+    onRemove: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (editMode) {
+            // Visible drag handle wired to the reorderable lib's existing long-press-drag detector.
+            Icon(
+                imageVector = Icons.Outlined.DragHandle,
+                contentDescription = "Drag to reorder ${cardUi.entityId}",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(end = 4.dp)
+                    .size(24.dp)
+                    .longPressDraggableHandle(),
+            )
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            // Inside edit mode, the row stops handling its own taps so the drag handle and
+            // delete badge are the only interactive surfaces — entity toggles are paused.
+            // Edit mode is entered via the title long-press → "Edit cards" action, not via
+            // a card long-press, since each EntityCard already owns its tap-and-long-press
+            // surface for entity-specific actions and stacking another long-press detector
+            // here fights for events with the inner clickable.
+            cardSlot(cardUi, isStale, editMode, Modifier.fillMaxWidth())
+            if (editMode) {
+                // Consume taps on the card body so EntityCard's own clickable doesn't fire
+                // service calls while the user is editing. Sits above the card, below the
+                // delete badge in the Box's paint order.
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .pointerInput(cardUi.cardId) {
+                            detectTapGestures(onTap = { /* swallow */ })
+                        }
+                        .semantics { contentDescription = "${cardUi.entityId} (editing)" },
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(24.dp)
+                        .zIndex(1f)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.error)
+                        .clickable(role = Role.Button, onClick = onRemove)
+                        .semantics { contentDescription = "Remove ${cardUi.entityId}" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onError,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DashboardHeader(
+    name: String,
+    indicator: StaleIndicatorUi,
+    editMode: Boolean,
+    onTitleClick: () -> Unit,
+    onTitleLongClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = name,
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.weight(1f).semantics { heading() },
-        )
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .combinedClickable(
+                    role = Role.Button,
+                    onClick = onTitleClick,
+                    onLongClick = onTitleLongClick,
+                )
+                .padding(vertical = 4.dp)
+                .semantics { heading() },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            Icon(
+                imageVector = Icons.Outlined.ArrowDropDown,
+                contentDescription = "Switch dashboard",
+            )
+            if (editMode) {
+                Spacer(Modifier.size(8.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    shape = RoundedCornerShape(50),
+                ) {
+                    Text(
+                        text = "Editing",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
+                }
+            }
+        }
         StaleStateIndicator(state = indicator)
     }
 }

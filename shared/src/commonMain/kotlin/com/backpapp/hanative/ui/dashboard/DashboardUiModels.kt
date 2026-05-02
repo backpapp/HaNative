@@ -6,6 +6,10 @@ sealed class DashboardUiState {
         val pickerVisible: Boolean = false,
         val switcher: DashboardSwitcherUi = DashboardSwitcherUi(),
         val indicator: StaleIndicatorUi = StaleIndicatorUi(StaleIndicatorKind.Connected),
+        val dashboardPickerVisible: Boolean = false,
+        val dashboardActionsVisible: Boolean = false,
+        val dashboardPickerQuery: String = "",
+        val editMode: Boolean = false,
     ) : DashboardUiState()
     data class Success(
         val dashboardName: String,
@@ -15,6 +19,10 @@ sealed class DashboardUiState {
         val pickerVisible: Boolean = false,
         val switcher: DashboardSwitcherUi = DashboardSwitcherUi(),
         val indicator: StaleIndicatorUi = StaleIndicatorUi(StaleIndicatorKind.Connected),
+        val dashboardPickerVisible: Boolean = false,
+        val dashboardActionsVisible: Boolean = false,
+        val dashboardPickerQuery: String = "",
+        val editMode: Boolean = false,
     ) : DashboardUiState()
 }
 
@@ -83,4 +91,13 @@ sealed class DashboardIntent {
     data class RequestDeleteDashboard(val dashboardId: String) : DashboardIntent()
     data object CancelDeleteDashboard : DashboardIntent()
     data class ConfirmDeleteDashboard(val dashboardId: String) : DashboardIntent()
+
+    // Tappable-title nav (Story: drawer-replacement)
+    data object OpenDashboardPicker : DashboardIntent()
+    data object DismissDashboardPicker : DashboardIntent()
+    data class UpdateDashboardPickerQuery(val query: String) : DashboardIntent()
+    data object OpenDashboardActions : DashboardIntent()
+    data object DismissDashboardActions : DashboardIntent()
+    data object EnterEditMode : DashboardIntent()
+    data object ExitEditMode : DashboardIntent()
 }

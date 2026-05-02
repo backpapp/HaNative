@@ -95,6 +95,10 @@ class DashboardViewModel(
     private val _optimisticOrder = MutableStateFlow<List<String>?>(null)
     private val _pendingNewDashboard = MutableStateFlow<PendingDashboard?>(null)
     private val _switcherChrome = MutableStateFlow(SwitcherChromeState())
+    private val _dashboardPickerVisible = MutableStateFlow(false)
+    private val _dashboardActionsVisible = MutableStateFlow(false)
+    private val _dashboardPickerQuery = MutableStateFlow("")
+    private val _editMode = MutableStateFlow(false)
 
     private val _haptics = MutableSharedFlow<HapticPattern>(extraBufferCapacity = 4)
     val haptics: SharedFlow<HapticPattern> = _haptics.asSharedFlow()
@@ -110,6 +114,13 @@ class DashboardViewModel(
         val lastMessageMs: Long?,
     )
 
+    private data class SheetChrome(
+        val pickerVisible: Boolean,
+        val actionsVisible: Boolean,
+        val pickerQuery: String,
+        val editMode: Boolean,
+    )
+
     val state: StateFlow<DashboardUiState> = combine(
         combine(
             getDashboards(),
@@ -121,8 +132,14 @@ class DashboardViewModel(
         connectionState,
         _pickerVisible,
         _optimisticOrder,
-    ) { sources, connection, pickerVisible, optimisticOrder ->
-        deriveState(sources, connection, pickerVisible, optimisticOrder)
+        combine(
+            _dashboardPickerVisible,
+            _dashboardActionsVisible,
+            _dashboardPickerQuery,
+            _editMode,
+        ) { p, a, q, e -> SheetChrome(p, a, q, e) },
+    ) { sources, connection, pickerVisible, optimisticOrder, sheetChrome ->
+        deriveState(sources, connection, pickerVisible, optimisticOrder, sheetChrome)
     }
         .distinctUntilChanged()
         .stateIn(
@@ -221,6 +238,21 @@ class DashboardViewModel(
                 it.copy(pendingDeleteId = null)
             }
             is DashboardIntent.ConfirmDeleteDashboard -> if (!loading) handleConfirmDelete(intent.dashboardId)
+
+            DashboardIntent.OpenDashboardPicker -> if (!loading) {
+                _dashboardPickerVisible.value = true
+                _dashboardPickerQuery.value = ""
+            }
+            DashboardIntent.DismissDashboardPicker -> {
+                _dashboardPickerVisible.value = false
+                _dashboardPickerQuery.value = ""
+            }
+            is DashboardIntent.UpdateDashboardPickerQuery ->
+                _dashboardPickerQuery.value = intent.query
+            DashboardIntent.OpenDashboardActions -> if (!loading) _dashboardActionsVisible.value = true
+            DashboardIntent.DismissDashboardActions -> _dashboardActionsVisible.value = false
+            DashboardIntent.EnterEditMode -> if (!loading) _editMode.value = true
+            DashboardIntent.ExitEditMode -> _editMode.value = false
         }
     }
 
@@ -229,6 +261,7 @@ class DashboardViewModel(
         connection: ServerManager.ConnectionState,
         pickerVisible: Boolean,
         optimisticOrder: List<String>?,
+        sheetChrome: SheetChrome,
     ): DashboardUiState {
         val (dashboards, persistedActiveId, pending, switcherChrome, lastMessageMs) = sources
         val active = activeView(dashboards, persistedActiveId, pending)
@@ -252,6 +285,10 @@ class DashboardViewModel(
                 pickerVisible = pickerVisible,
                 switcher = switcher,
                 indicator = indicator,
+                dashboardPickerVisible = sheetChrome.pickerVisible,
+                dashboardActionsVisible = sheetChrome.actionsVisible,
+                dashboardPickerQuery = sheetChrome.pickerQuery,
+                editMode = sheetChrome.editMode,
             )
         }
         val isStale = indicator.kind != StaleIndicatorKind.Connected
@@ -270,6 +307,10 @@ class DashboardViewModel(
             pickerVisible = pickerVisible,
             switcher = switcher,
             indicator = indicator,
+            dashboardPickerVisible = sheetChrome.pickerVisible,
+            dashboardActionsVisible = sheetChrome.actionsVisible,
+            dashboardPickerQuery = sheetChrome.pickerQuery,
+            editMode = sheetChrome.editMode,
         )
     }
 
@@ -440,6 +481,7 @@ class DashboardViewModel(
         if (active == dashboardId) {
             // Same id — close sheet, no haptic, no persist.
             closeSwitcher()
+            closeDashboardPicker()
             return
         }
         // Switching away from a pending dashboard discards it (P3: clear stale rename target too).
@@ -448,11 +490,20 @@ class DashboardViewModel(
         }
         // P8: optimistic reorder belongs to the outgoing dashboard's cards — drop on switch.
         _optimisticOrder.value = null
+        // Edit mode is per-dashboard — leaving the dashboard always exits edit mode so the
+        // user doesn't end up with X badges on a freshly-loaded board they didn't ask to edit.
+        _editMode.value = false
         viewModelScope.launch {
             setActiveDashboardId(dashboardId)
         }
         _haptics.tryEmit(HapticPattern.DashboardSwitch)
         closeSwitcher()
+        closeDashboardPicker()
+    }
+
+    private fun closeDashboardPicker() {
+        _dashboardPickerVisible.value = false
+        _dashboardPickerQuery.value = ""
     }
 
     // P1 + P2: closing the sheet for any reason flushes all transient sheet state
