@@ -31,6 +31,17 @@
     <dict/>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Connect directly to your Home Assistant instance on your local network.</string>
+    <!--
+      App Transport Security: HA on LAN is reached over plain ws:// (e.g. ws://192.168.1.80:8123).
+      NSAllowsLocalNetworking permits non-TLS connections to private/loopback addresses only —
+      the Nabu Casa cloud URL still goes over wss://, so this is the minimum needed exception
+      and no broader NSAllowsArbitraryLoads is required.
+    -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
     <key>NSBonjourServices</key>
     <array>
         <string>_home-assistant._tcp</string>
