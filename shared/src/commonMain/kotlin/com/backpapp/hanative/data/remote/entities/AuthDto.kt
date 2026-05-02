@@ -1,5 +1,7 @@
 package com.backpapp.hanative.data.remote.entities
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -9,9 +11,10 @@ data class AuthRequiredDto(
     @SerialName("ha_version") val haVersion: String,
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class AuthMessageDto(
-    val type: String = "auth",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val type: String = "auth",
     @SerialName("access_token") val accessToken: String,
 )
 
