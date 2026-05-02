@@ -112,7 +112,22 @@ internal fun DashboardBody(
         DashboardUiState.Loading -> false
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            // Long-press on dashboard background (anywhere not consumed by a card / button /
+            // toggleable surface) opens the actions sheet — same destination as the title
+            // long-press, so the gesture works on the empty state, around cards, and below
+            // the add-card affordance. Toggle cards still consume their own press because
+            // they intentionally fire on touch-down for snappy feedback; that's a feature,
+            // not a regression — the gap-and-margin between cards is enough hit target.
+            .pointerInput(state is DashboardUiState.Loading) {
+                if (state is DashboardUiState.Loading) return@pointerInput
+                detectTapGestures(
+                    onLongPress = { onIntent(DashboardIntent.OpenDashboardActions) },
+                )
+            },
+    ) {
         when (state) {
             DashboardUiState.Loading -> LoadingContent()
             is DashboardUiState.Empty -> EmptyDashboardState(
