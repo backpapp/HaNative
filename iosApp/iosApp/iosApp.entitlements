@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Required so SecItemAdd does not return errSecMissingEntitlement (-34018) on
+      iOS Simulator builds with newer Xcode tooling. The bundle id is the default
+      access group; the literal value is filled in at sign time via the team prefix.
+    -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)$(CFBundleIdentifier)</string>
+    </array>
+</dict>
+</plist>
