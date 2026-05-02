@@ -153,7 +153,11 @@ class AuthViewModel(
                     return@launch
                 }
                 val body = response.body<AuthTokenResponseDto>()
-                authRepository.saveToken(body.accessToken)
+                authRepository.saveOauthTokens(
+                    accessToken = body.accessToken,
+                    refreshToken = body.refreshToken,
+                    expiresInSeconds = body.expiresIn,
+                )
                 serverManager.initialize(lanUrl = haUrl)
                 viewModelScope.launch { serverManager.connect() }
                 _uiState.value = AuthUiState.Success

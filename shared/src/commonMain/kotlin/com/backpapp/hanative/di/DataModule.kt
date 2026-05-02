@@ -1,11 +1,14 @@
 package com.backpapp.hanative.di
 
 import com.backpapp.hanative.data.remote.AuthenticationRepositoryImpl
+import com.backpapp.hanative.data.remote.HaOAuthRefreshClient
 import com.backpapp.hanative.data.remote.HaReconnectManager
 import com.backpapp.hanative.data.remote.HaUrlRepository
 import com.backpapp.hanative.data.remote.KtorHaWebSocketClient
+import com.backpapp.hanative.data.remote.OAuthRefreshClient
 import com.backpapp.hanative.data.remote.ServerManager
 import com.backpapp.hanative.data.remote.SessionRepository
+import com.backpapp.hanative.ui.auth.CLIENT_ID
 import com.backpapp.hanative.data.repository.ActiveDashboardRepositoryImpl
 import com.backpapp.hanative.data.repository.DashboardRepositoryImpl
 import com.backpapp.hanative.data.repository.EntityRepositoryImpl
@@ -42,7 +45,14 @@ fun serverManagerModule(): Module = module {
     single { HaUrlRepository(get(), get()) }
     single { KtorHaWebSocketClient(get()) }
     single<HaWebSocketClient> { get<KtorHaWebSocketClient>() }
-    single { AuthenticationRepositoryImpl(get()) }
+    single<OAuthRefreshClient> {
+        HaOAuthRefreshClient(
+            httpClient = get(),
+            urlRepository = get(),
+            clientId = CLIENT_ID,
+        )
+    }
+    single { AuthenticationRepositoryImpl(get(), get()) }
     single { HaReconnectManager() }
     single {
         ServerManager(
