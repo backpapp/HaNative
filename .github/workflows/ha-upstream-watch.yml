@@ -64,7 +64,8 @@ jobs:
             rm -f "$tmp_file"
           }
 
-          # Android — 4 files
+          # Android — 3 files (MapAnySerializer was removed upstream and is no longer
+          # tracked here; the local snapshot is owned by us now).
           check_file \
             "ha-upstream-refs/android/Entity.kt" \
             "${ANDROID_BASE}/common/src/main/kotlin/io/homeassistant/companion/android/common/data/integration/Entity.kt"
@@ -77,10 +78,6 @@ jobs:
             "ha-upstream-refs/android/AuthenticationRepositoryImpl.kt" \
             "${ANDROID_BASE}/common/src/main/kotlin/io/homeassistant/companion/android/common/data/authentication/impl/AuthenticationRepositoryImpl.kt"
 
-          check_file \
-            "ha-upstream-refs/android/MapAnySerializer.kt" \
-            "${ANDROID_BASE}/common/src/main/kotlin/io/homeassistant/companion/android/common/data/integration/impl/entities/MapAnySerializer.kt"
-
           # iOS — 3 files
           check_file \
             "ha-upstream-refs/ios/TokenManager.swift" \
@@ -90,24 +87,28 @@ jobs:
             "ha-upstream-refs/ios/Bonjour.swift" \
             "${IOS_BASE}/Sources/App/Onboarding/API/Bonjour.swift"
 
+          # WebSocketMessage.swift was moved upstream into the WebSocket subfolder
+          # (was Sources/Shared/API/Models/WebSocketMessage.swift before).
           check_file \
             "ha-upstream-refs/ios/WebSocketMessage.swift" \
-            "${IOS_BASE}/Sources/Shared/API/Models/WebSocketMessage.swift"
+            "${IOS_BASE}/Sources/Shared/API/WebSocket/WebSocketMessage.swift"
 
+          # Persist the issue body to a file rather than stuffing it through GITHUB_OUTPUT
+          # + an env var: the diffs can grow past the per-step output and per-arg ceilings,
+          # and embedding triple-backtick code fences inside the heredoc has burned us
+          # before. `gh issue create --body-file` reads it cleanly.
+          mkdir -p "$RUNNER_TEMP/ha-upstream"
+          printf '%s' "$BODY" > "$RUNNER_TEMP/ha-upstream/body.md"
           echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
-          {
-            echo "body<<HA_WATCH_EOF"
-            printf '%s' "$BODY"
-            echo "HA_WATCH_EOF"
-          } >> "$GITHUB_OUTPUT"
+          echo "body_file=$RUNNER_TEMP/ha-upstream/body.md" >> "$GITHUB_OUTPUT"
 
       - name: Open GitHub issue
         if: steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ISSUE_BODY: ${{ steps.diff.outputs.body }}
+          BODY_FILE: ${{ steps.diff.outputs.body_file }}
         run: |
           gh issue create \
             --title "HA upstream change detected — $(date -u +%Y-%m-%d)" \
-            --body "$ISSUE_BODY" \
+            --body-file "$BODY_FILE" \
             --label "ha-upstream-change"
