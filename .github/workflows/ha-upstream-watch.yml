@@ -53,7 +53,11 @@ jobs:
 
             if ! diff -q "$local_path" "$tmp_file" > /dev/null 2>&1; then
               CHANGED=true
-              full_diff=$(diff "$local_path" "$tmp_file")
+              # `diff` exits 1 when files differ; without `|| true` the bare assignment
+              # carries that exit code and GitHub Actions' implicit `set -eo pipefail`
+              # kills the step. (This is what was failing before — it was never the
+              # issue-creation step.)
+              full_diff=$(diff "$local_path" "$tmp_file" || true)
               line_count=$(printf '%s\n' "$full_diff" | wc -l)
               file_diff=$(printf '%s\n' "$full_diff" | head -150)
               if [ "$line_count" -gt 150 ]; then
