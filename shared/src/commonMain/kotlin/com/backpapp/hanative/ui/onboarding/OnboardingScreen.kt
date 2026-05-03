@@ -33,13 +33,12 @@ fun OnboardingScreen(
     modifier: Modifier = Modifier,
 ) {
     val viewModel: OnboardingViewModel = koinViewModel()
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val discoveredServers by viewModel.discoveredServers.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     var urlInput by rememberSaveable { mutableStateOf("") }
 
-    LaunchedEffect(uiState) {
-        if (uiState is OnboardingUiState.Success) {
+    LaunchedEffect(state.pendingNavigationUrl) {
+        if (state.pendingNavigationUrl != null) {
             onNavigateToAuth()
             viewModel.onNavigationConsumed()
         }
@@ -51,7 +50,7 @@ fun OnboardingScreen(
             onValueChange = { urlInput = it },
             label = { Text("Home Assistant URL") },
             modifier = Modifier.fillMaxWidth(),
-            enabled = uiState !is OnboardingUiState.Loading,
+            enabled = !state.isLoading,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
             keyboardActions = KeyboardActions(
                 onGo = { if (urlInput.isNotBlank()) viewModel.testUrl(urlInput) }
@@ -59,36 +58,33 @@ fun OnboardingScreen(
             singleLine = true,
         )
 
-        if (uiState is OnboardingUiState.Error) {
+        state.errorMessage?.let { msg ->
             Text(
-                text = (uiState as OnboardingUiState.Error).message,
+                text = msg,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
 
-        if (uiState is OnboardingUiState.Loading) {
+        if (state.isLoading) {
             CircularProgressIndicator(modifier = Modifier.padding(top = 12.dp))
         } else {
             Button(
                 onClick = { viewModel.testUrl(urlInput) },
-                enabled = urlInput.isNotBlank() && uiState !is OnboardingUiState.Loading,
+                enabled = urlInput.isNotBlank(),
                 modifier = Modifier.padding(top = 12.dp),
             ) {
                 Text("Connect")
             }
         }
 
-        if (discoveredServers.isNotEmpty()) {
+        if (state.discoveredServers.isNotEmpty()) {
             LazyColumn(modifier = Modifier.padding(top = 16.dp)) {
-                items(discoveredServers) { server ->
+                items(state.discoveredServers) { server ->
                     ListItem(
                         headlineContent = { Text(server.name) },
-                        supportingContent = { Text("${server.host}:${server.port}") },
-                        modifier = Modifier.clickable {
-                            val host = if (server.host.contains(':')) "[${server.host}]" else server.host
-                            urlInput = "$host:${server.port}"
-                        },
+                        supportingContent = { Text(server.hostPortLabel) },
+                        modifier = Modifier.clickable { urlInput = server.urlInput },
                     )
                 }
             }

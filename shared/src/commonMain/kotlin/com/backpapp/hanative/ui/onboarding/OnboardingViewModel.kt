@@ -8,14 +8,8 @@ import com.backpapp.hanative.platform.ServerDiscovery
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-sealed class OnboardingUiState {
-    data object Idle : OnboardingUiState()
-    data object Loading : OnboardingUiState()
-    data class Success(val url: String) : OnboardingUiState()
-    data class Error(val message: String) : OnboardingUiState()
-}
 
 private const val GENERIC_ERROR = "Can't reach this address — check the URL and try again"
 
@@ -24,44 +18,62 @@ class OnboardingViewModel(
     private val serverDiscovery: ServerDiscovery,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<OnboardingUiState>(OnboardingUiState.Idle)
+    private val _uiState = MutableStateFlow(OnboardingUiState())
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
-
-    private val _discoveredServers = MutableStateFlow<List<HaServerInfo>>(emptyList())
-    val discoveredServers: StateFlow<List<HaServerInfo>> = _discoveredServers.asStateFlow()
 
     init {
         viewModelScope.launch {
             serverDiscovery.startDiscovery().collect { servers ->
-                _discoveredServers.value = servers
+                _uiState.update { it.copy(discoveredServers = servers.map(::toUi)) }
             }
         }
     }
 
     fun testUrl(rawInput: String) {
-        if (_uiState.value is OnboardingUiState.Loading) return
+        if (_uiState.value.phase is OnboardingUiState.Phase.Loading) return
         val trimmed = rawInput.trim()
         if (trimmed.isEmpty()) return
-        _uiState.value = OnboardingUiState.Loading
+        _uiState.update {
+            it.copy(phase = OnboardingUiState.Phase.Loading, errorMessage = null)
+        }
         viewModelScope.launch {
             val candidates = candidateUrls(trimmed)
             val successUrl = candidates.firstOrNull { url ->
                 urlRepository.testUrl(url).isSuccess
             }
             if (successUrl == null) {
-                _uiState.value = OnboardingUiState.Error(GENERIC_ERROR)
+                _uiState.update {
+                    it.copy(phase = OnboardingUiState.Phase.Error, errorMessage = GENERIC_ERROR)
+                }
                 return@launch
             }
             urlRepository.saveUrl(successUrl).fold(
-                onSuccess = { _uiState.value = OnboardingUiState.Success(successUrl) },
-                onFailure = { _uiState.value = OnboardingUiState.Error(GENERIC_ERROR) },
+                onSuccess = {
+                    _uiState.update { current ->
+                        current.copy(
+                            phase = OnboardingUiState.Phase.Success(successUrl),
+                            errorMessage = null,
+                            pendingNavigationUrl = successUrl,
+                        )
+                    }
+                },
+                onFailure = {
+                    _uiState.update {
+                        it.copy(
+                            phase = OnboardingUiState.Phase.Error,
+                            errorMessage = GENERIC_ERROR,
+                        )
+                    }
+                },
             )
         }
     }
 
     fun onNavigationConsumed() {
-        if (_uiState.value is OnboardingUiState.Success) {
-            _uiState.value = OnboardingUiState.Idle
+        if (_uiState.value.phase is OnboardingUiState.Phase.Success) {
+            _uiState.update {
+                it.copy(phase = OnboardingUiState.Phase.Idle, pendingNavigationUrl = null)
+            }
         }
     }
 
@@ -69,6 +81,15 @@ class OnboardingViewModel(
         super.onCleared()
         serverDiscovery.stopDiscovery()
     }
+}
+
+private fun toUi(server: HaServerInfo): DiscoveredServerUi {
+    val bracketedHost = if (server.host.contains(':')) "[${server.host}]" else server.host
+    return DiscoveredServerUi(
+        name = server.name,
+        hostPortLabel = "${server.host}:${server.port}",
+        urlInput = "$bracketedHost:${server.port}",
+    )
 }
 
 private fun candidateUrls(input: String): List<String> {
