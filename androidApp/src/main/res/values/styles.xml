@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Inherits the framework DayNight theme so dark/light follows system, but strips the
+      ActionBar / window title since the dashboard owns its own header. Without this the
+      "HaNative" label and OS action bar painted a permanent strip above the dashboard
+      title, defeating the no-chrome layout.
+    -->
+    <style name="HaNativeAppTheme" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
